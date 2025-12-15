@@ -2,7 +2,9 @@ import json
 import shutil
 import subprocess
 import tempfile
+import re
 from pathlib import Path
+
 
 class PdfImageExtractor:
     def __init__(self, tool_root):
@@ -15,10 +17,28 @@ class PdfImageExtractor:
         )
         subprocess.run(cmd, cwd=self.tool_root, shell=True, capture_output=False)
 
-    def extract(self, pdf_path, page, out_dir, name):
+    def _extract_figure_number(self, caption):
+        """
+        Extracts figure number like:
+        Figure 3
+        Fig. 2a
+        fig 10B
+        """
+        match = re.search(
+            r'\b(fig|figure)\.?\s*(\d+[a-zA-Z]?)',
+            caption,
+            re.IGNORECASE
+        )
+        if match:
+            return match.group(2).lower()
+        return None
+
+    def extract_all_figures(self, pdf_path, out_dir):
         pdf_path = Path(pdf_path).resolve()
         out_dir = Path(out_dir).resolve()
         out_dir.mkdir(exist_ok=True, parents=True)
+
+        fig_word_pattern = re.compile(r"\b(fig|fig\.|figure|figure\.)\b", re.IGNORECASE)
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -33,14 +53,49 @@ class PdfImageExtractor:
                 return
 
             metadata = json.load(open(metadata_file))
-            fig = next((m for m in metadata if m["page"] == page - 1), None)
-            if not fig:
-                return
 
-            img_src = tmp / "img" / Path(fig["renderURL"]).name
-            final_img = out_dir / f"{name}{img_src.suffix}"
-            shutil.copy2(img_src, final_img)
+            all_fig_meta = []
 
-            fig.pop("renderURL", None)
-            fig["filename"] = final_img.name
-            json.dump([fig], open(out_dir / f"{name}.json", "w"), indent=4)
+            for fig in metadata:
+
+                # ---- exclude tables ----
+                if fig.get("figureType", "").lower() == "table":
+                    continue
+
+                caption = fig.get("caption", "")
+                if not fig_word_pattern.search(caption):
+                    continue
+
+                fig_no = self._extract_figure_number(caption)
+                if not fig_no:
+                    continue  # skip if no explicit figure number
+
+                render_url = fig.get("renderURL")
+                if not render_url:
+                    continue
+
+                img_src = tmp / "img" / Path(render_url).name
+                if not img_src.exists():
+                    continue
+
+                final_img = out_dir / f"figure_{fig_no}{img_src.suffix}"
+
+                # avoid overwrite (rare but safe)
+                counter = 1
+                while final_img.exists():
+                    final_img = out_dir / f"figure_{fig_no}_{counter}{img_src.suffix}"
+                    counter += 1
+
+                shutil.copy2(img_src, final_img)
+
+                fig = fig.copy()
+                fig.pop("renderURL", None)
+                fig["filename"] = final_img.name
+
+                all_fig_meta.append(fig)
+
+            json.dump(
+                all_fig_meta,
+                open(out_dir / "figures_all.json", "w"),
+                indent=4
+            )
