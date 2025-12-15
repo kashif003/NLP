@@ -1,3 +1,4 @@
+# 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
 annotated-types==0.7.0
 anyio==4.11.0
 argon2-cffi==25.1.0
