@@ -24,7 +24,7 @@ Definition_pattern= [
     ]
 
 #  These configs are related to model.
-model_configs= {"models":["allenai/specter2_base"]}
+model_configs= {"models":["sentence-transformers/all-mpnet-base-v2", "allenai/specter2_base","allenai/scibert_scivocab_uncased"]}
 adapter_configs= {"allenai/specter2": {"source":"hf",
     "load_as":"specter2_proximity",
     "set_active":True}}

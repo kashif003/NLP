@@ -136,7 +136,6 @@ class LatexReader:
         if not self.raw_content:
             print("Warning: No raw content to process.")
             return []
-
         for i, content in enumerate(self.raw_content, 1):
             try:
                 preprocessor = Latex_preprocessor(content)

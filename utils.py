@@ -16,6 +16,7 @@ from embeddings import *
 import torch.nn.functional as F
 import nltk
 from nltk.tokenize import sent_tokenize
+from pdf_image_extractor import *
 
 
 
@@ -115,13 +116,14 @@ def get_quantum_circuit_pdf_text(json_path: str, max_pdfs: int, output_txt_path:
         source_path = f"paper_source/{pdf_id}"
         reader = LatexReader(source_path)
         content_dict = reader.process_contents()
+        print("content processed")
         if not content_dict:
             print(f"Problem with {pdf_id} – SKIPPING!")
             continue
         # Combine content of all files for this PDF
         temp_content = []
         for file_dict in content_dict:
-            content = ". ".join(list(file_dict.values()))
+            content = ". ".join(file_dict)
             temp_content.append(content)
         pdf_text = " ".join(temp_content)
         pdf_content.append(pdf_text)
@@ -218,14 +220,14 @@ def get_caption_description(path):
     reader = LatexReader(path)
     figure_descriptions = []
     figure_captions = []
-    for description in reader.get_figure_discription():
-        dis_text= Latex_preprocessor(description).clean_caption_discription()
+    for description in reader.get_figure_description():
+        dis_text= Latex_preprocessor(description).clean_caption_description()
         if dis_text is None:
             continue
         figure_descriptions.append(dis_text)
 
     for caption in reader.get_figure_captions():
-        cap_text= Latex_preprocessor(caption).clean_caption_discription()
+        cap_text= Latex_preprocessor(caption).clean_caption_description()
         if cap_text is None:
             continue
         figure_captions.append(cap_text)
@@ -233,15 +235,20 @@ def get_caption_description(path):
 
 
 
-# this fucntion is used to get the caption/discription to match with the anchor embeddings and return only that text which is crossing the threshold.
+# this fucntion is used to get the caption/description to match with the anchor embeddings and return only that text which is crossing the threshold.
 def compare_embeddings(text_list,model, tokenizer, anchor, threshold=0.80):
     """
-    text_list= caption_list or discription list.
+    text_list= caption_list or description list.
     anchor= embedding or anchor quantum circuit sentences.
     """
+    score=0
+    if len(text_list)==0:
+        return False, 0
     anchor_emb = anchor.unsqueeze(0)
     for text in text_list:
-        embeddings=encode_sentences(text, model, tokenizer)
+        if len(text)==0:
+            continue
+        embeddings=get_anchor_embedding(text,  model, tokenizer)
         score=F.cosine_similarity(embeddings, anchor_emb, dim=1).item()
         if score>=threshold:
             return True, score
@@ -318,8 +325,218 @@ def clean_json_caption(text):
         text = re.sub(r"\b(?:fig|figure)\s+\d+\s*:?", "", text, flags=re.IGNORECASE).strip()
 
         return text
+
+
+def process_paper(path, anchor, model, tokenizer, threshold=0.96):
+    json_file= {}
+    paper_list= paper_ID_extractor(path)
+    figure_name=1
+
+    for paper_idx,paper_id in enumerate(paper_list,1):
+        process_pdf=False
+
+        print("PAPER_NUMBER:", paper_idx)
+        get_data=False
+        # get 10 images for now only
+        if len(list(json_file.keys()))>=10:
+            break
+        if os.path.exists("temp_Images"):   # removiing the previous pdf images
+            shutil.rmtree("temp_Images")
+        # downloading the paper 
+        paper_downloader(paper_id)
+        os.makedirs("temp_Images", exist_ok=True)    #  making temp folder to check images.
+        pdf_path= f"paper_pdf/{paper_id}.pdf"
+        source_path= f"paper_source/{paper_id}"
+        # getting all images from the pdf
+        PdfImageExtractor("pdffigures2").extract_all_figures(pdf_path,"temp_Images")     
+        if os.path.exists(source_path):
+            print("Source file exists! Processing Latex files.") # need to edit this
+        else:
+            print("source file does not exist! Processing PDF.")
+            process_pdf=True
+        if process_pdf:
+            print("Working on pdf.") # need to add the code here
+        else:
+        # Getting captions and respective descriptions.
+            cap_disc= LatexReader(source_path).get_caption_description_dict()
+        # getting the data about the figures
+        with open("temp_Images/figures_all.json", "r", encoding="utf-8") as f:
+            figure_list = json.load(f)
+        # sorting the figure data in order (caption, fig no, page no)
+        figure_data= []
+        for dict in figure_list:
+            figure_data.append((dict["caption"], dict["name"], dict["page"]))
+        # comparing the caption and description of the pdf
+        for cap_idx,(caption, description) in enumerate(cap_disc.items()):
+            # checking if caption is matching with anchor embeddings
+            caption_score= compare_embeddings(caption,model, tokenizer, anchor ,threshold=threshold)
+            if caption_score[0]:
+                found_match = True
+                # if it matches get the meta data (caption, fig no, page no)
+                meta_data= get_meta_data_from_pdf(figure_data, caption)
+                # if we are able to extract figure  number then we will extract the figure 
+                if meta_data["fig_number"] is not None:
+                    print(f"QUANTUM CIRCUIT FOUND IN {paper_id} AT PAGE NUMBER {meta_data["page_number"]} USING CAPTION. EXTRACTING THE META DATA.")
+                    get_data=True
+            else:
+                # if caption does not match processing the description.
+                print(f"Processing descriptions of the figures.\n {description} ")
+                for disc in description:
+                    score_2=compare_embeddings(disc[1],model, tokenizer, anchor, threshold=threshold)
+                    print("score:",score_2[1])
+                    # if we have a match then extracting meta data
+                    if score_2[0]:
+                        found_match = True
+                        meta_data= get_meta_data_from_pdf(figure_data, caption)
+                        if meta_data["fig_number"] is not None:
+                            print(f"QUANTUM CIRCUIT FOUND IN {paper_id} AT PAGE NUMBER {meta_data["page_number"]}. EXTRACTING THE META DATA.")
+                            get_data=True
+                            break
+            
+            # getting the data (description, start_end, image, arxiv number)
+            if get_data:
+                get_data=False
+                for disc in description:
+                    meta_data.setdefault("description", []).append(disc[1])
+                    meta_data.setdefault("start_end", []).append(description[0])
+                meta_data["arxiv_id"] = paper_id
+                # saving the image in another folder.
+                print("saving image:", meta_data["fig_number"])
+                os.makedirs("quantum_circuit_images", exist_ok=True)
+                src_path = os.path.join("temp_Images/", f"figure_{meta_data["fig_number"]}.png")
+                dst_path = os.path.join("quantum_circuit_images", f"{figure_name}.png")
+                shutil.copy2(src_path, dst_path)
+                json_file[f"{figure_name}.png"]= meta_data
+                print("IMAGE SAVED SUCCESSFULLY",meta_data["fig_number"])
+                figure_name+=1
+
+    return json_file
+
+
+
+KEEP_TERMS = [
+    "consists of", "composed of", "defined as", "represents",
+    "implements", "used to", "describes", "models"
+]
+# this fucntion is used to preprocess the sentences used for embeddings.
+
+def extract_qc_sentences(tokens):
+    def normalize(sent):
+        sent = sent.lower()
+        sent = re.sub(r"\bquantum circuits?\b", "[quantum circuit]", sent, flags=re.IGNORECASE).replace("%", "").replace("&", "").replace("$", "").replace("(", "").replace(")", "").replace("§", "").replace("=", "").replace(",", "")
+        sent = re.sub(r"\d+", "[num]", sent)
+        sent = sent.replace("\n", " ")
+        sent = re.sub(r"\s+", " ", sent)
+        return sent.strip()
+    def is_trivial(s):
+        if len(s.split()) < 8:
+            return True
+        if re.search(r"\b(fig|table|sec|section|see)\b", s):
+            return True
+        if re.match(r"^(introduction|methods|results)", s):
+            return True
+        return False
+    def passes_keyword_gate(s):
+        return any(term in s for term in KEEP_TERMS)
+    sentences = [normalize(s) for s in tokens]
+    sentences = [s for s in sentences if not is_trivial(s)]
+    filtered = [s for s in sentences if passes_keyword_gate(s)]
+    qc_sentences =filtered#  [s for s in filtered if "[quantumcircuit]"  in s.lower()]
+    return qc_sentences
+
+
+
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+def word_cloud(sentences):
+    cloud = WordCloud().generate(" ".join(sentences) )
+    plt.imshow(cloud)
+    plt.axis("off")
+    plt.show()
+
+
+def sentenize(partition_list):
+    #Training
+    num_words_partition = 0
+    sentences_partition = []
+    for partition_tweet in partition_list:
+        tweet_proc = partition_tweet.replace(" !", " .").replace(" ?", " .")
+        sent_part = tweet_proc.split(" .")
+        sent_part = list(filter(None, sent_part))
+        for sent in sent_part:
+            sent = sent.replace("%", "").replace("&", "").replace("$", "").replace("(", "").replace(")", "").replace("[", "").replace("]", "").replace("§", "").replace("=", "").replace(",", "")
+            words = sent.strip().split(" ")
+            words = [word for word in words if word not in stopwords.words('english')]
+            
+            final_words = []
+            for word in words:
+                
+                if word.isalnum(): 
+                    final_words.append(word) 
+                    
+            sentences_partition.append(final_words)
+            num_words_partition += len(final_words)
+            
+    return sentences_partition, num_words_partition
+
+
+
+
+def get_word_embeddings(model, wordlist, topn):
+    w_cloud = {}
+    for t_w in wordlist:
+        w_sim = {}
+        if topn != 0:
+            silimarity_ws = model.most_similar(positive=[t_w], topn=topn)
+            for label, cosine in silimarity_ws:
+                embedding = model.get_vector(label)
+                w_sim[label] = embedding
+        w_sim[t_w] = model.get_vector(t_w)
+        w_cloud[t_w] = w_sim
+
+    return w_cloud
+
+def get_labels_embeddings(word_cloud):
+    embeddings=[]
+    labels=[]
+    for key in word_cloud:
+        word_embed = word_cloud.get(key)
+        for word in word_embed:
+            labels.append(word)
+            embeddings.append(word_embed.get(word))
+    
+    return np.array(labels), np.array(embeddings)
+
+from matplotlib import cm
+from sklearn.manifold import TSNE
+
+def tsne_plot(word_cloud, topn):
+    labels, tokens = get_labels_embeddings(word_cloud)
+
+    if topn != 0:
+        colors = cm.rainbow(np.linspace(0, 1, len(labels))) 
+    else:
+        color = ["orange"]
+    
+    tsne_model = TSNE(perplexity=4, n_components=2, init='pca', n_iter=3500, random_state=10)
+    tsne_values = tsne_model.fit_transform(tokens)
+
+    x = []
+    y = []
+    
+    for value in tsne_values:
+        x.append(value[0])
+        y.append(value[1])
         
-
-
+    plt.figure(figsize=(16, 10)) 
+    
+    for i in range(len(x)):
+        if topn != 0:
+            if i % (topn+1) == 0:
+                color = colors[i-1]
+        plt.scatter(x[i],y[i],color=color)
+        plt.annotate(labels[i], xy=(x[i], y[i]))
+   
+    plt.show()
 
 
