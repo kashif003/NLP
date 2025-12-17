@@ -16,7 +16,8 @@ from embeddings import *
 import torch.nn.functional as F
 import nltk
 from nltk.tokenize import sent_tokenize
-from pdf_image_extractor import *
+from pdf_image_extractor import extract_figures_from_pdf
+import shutil
 
 
 
@@ -32,9 +33,12 @@ def paper_ID_extractor(path):
 
 
 def paper_downloader(paper_ID):
-    time.sleep(3)
+    if os.path.exists(f"paper_source/{paper_ID}"):
+        print("Paper already exists, SKIPPING DOWNLOADING!!!!!!!!!!!!!!!!!")
+        return
     client = arxiv.Client()
     search = arxiv.Search(id_list=[paper_ID])
+    time.sleep(5)
     paper = next(client.results(search))
     if not any(cat.startswith("quant-ph") for cat in paper.categories):
         print(f"Paper {paper_ID} is not in quant-ph, categories: {paper.categories}. SKIPPING DOWNLOAD.")
@@ -265,20 +269,33 @@ def get_meta_data_from_pdf(figure_data, caption):
      2. page_number where the figure if found.
      3. figure_number.
     """
-    meta_data= {}
+    meta_data = {"fig_number": None, "page_number": None}  # Initialize with default values
+
     for data in figure_data:
-        figure_caption= data[0]
-        figure_number= data[1]
-        page_number= data[2]
-        figure_caption= clean_json_caption(figure_caption)
+        figure_caption = data[0]
+        figure_number = data[1]
+        page_number = data[2]
+        figure_caption = clean_json_caption(figure_caption)
         sentences_1 = sent_tokenize(figure_caption)
         sentences_2 = sent_tokenize(caption)
-        is_similar, score=compare_captions(sentences_1[0], sentences_2[0], threshold= 0.5)
+
+        print("Comparing captions:")
+        print("Figure caption:", sentences_1)
+        print("Input caption:", sentences_2)
+
+        is_similar, score = compare_captions(sentences_1[0], sentences_2[0], threshold=0.5)
+        print("Similarity score:", score)
+
         if is_similar:
-            meta_data["fig_number"]= figure_number
-            meta_data["page_number"]= page_number
-    if not meta_data:
-        print("No caption found.")
+            print("Match found! Extracting metadata.")
+            meta_data["fig_number"] = figure_number
+            meta_data["page_number"] = page_number
+            print("Extracted figure number:", figure_number)
+            print("Extracted page number:", page_number)
+            break  # Exit loop once a match is found
+
+    if meta_data["fig_number"] is None:
+        print("No matching caption found.")
     return meta_data
 
 
@@ -347,7 +364,7 @@ def process_paper(path, anchor, model, tokenizer, threshold=0.96):
         pdf_path= f"paper_pdf/{paper_id}.pdf"
         source_path= f"paper_source/{paper_id}"
         # getting all images from the pdf
-        PdfImageExtractor("pdffigures2").extract_all_figures(pdf_path,"temp_Images")     
+        extract_figures_from_pdf(pdf_path, "temp_Images")   
         if os.path.exists(source_path):
             print("Source file exists! Processing Latex files.") # need to edit this
         else:
