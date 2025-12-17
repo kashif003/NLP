@@ -249,7 +249,7 @@ def compare_embeddings(text_list,model, tokenizer, anchor, threshold=0.80):
         if len(text)==0:
             continue
         embeddings=get_anchor_embedding(text,  model, tokenizer)
-        score=F.cosine_similarity(embeddings, anchor_emb, dim=1).item()
+        score=F.cosine_similarity(embeddings, anchor_emb, dim=0).item()
         if score>=threshold:
             return True, score
     return False, score
@@ -279,7 +279,6 @@ def get_meta_data_from_pdf(figure_data, caption):
             meta_data["page_number"]= page_number
     if not meta_data:
         print("No caption found.")
-        print("caption:",repr(caption))
     return meta_data
 
 
@@ -380,7 +379,11 @@ def process_paper(path, anchor, model, tokenizer, threshold=0.96):
                     get_data=True
             else:
                 # if caption does not match processing the description.
-                print(f"Processing descriptions of the figures.\n {description} ")
+                # print(f"Processing descriptions of the figures.\n {description} ")
+                print(cap_disc)
+                print("*"*100)
+                break
+
                 for disc in description:
                     score_2=compare_embeddings(disc[1],model, tokenizer, anchor, threshold=threshold)
                     print("score:",score_2[1])
@@ -409,7 +412,7 @@ def process_paper(path, anchor, model, tokenizer, threshold=0.96):
                 json_file[f"{figure_name}.png"]= meta_data
                 print("IMAGE SAVED SUCCESSFULLY",meta_data["fig_number"])
                 figure_name+=1
-
+        break
     return json_file
 
 
