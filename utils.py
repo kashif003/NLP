@@ -203,11 +203,13 @@ def clean_for_embeddings(text_input):
         return process_text(text_input)
 
 from embedding import *
+import torch
 def compare_embedding(text, anchor, model, tokenizer, threshold=0.95):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if len(text) == 0:
         return False, 0, None
 
-    anchor_embed = anchor.unsqueeze(0)
+    anchor_embed = anchor.unsqueeze(0).to(device)
     embeddings = encode_sentences(text, model, tokenizer)
     score = list(F.cosine_similarity(embeddings, anchor_embed, dim=1))
     print(score)

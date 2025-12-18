@@ -31,7 +31,7 @@ for i,paper_id in enumerate(paper_list):
      else:
           captions, discriptions, start_end= get_caption_discription(paper_id, pdf_source=False)
 # 5) compare caption and discriptions and gettting the index of captions. 
-     caption_index=get_caption_index(model,tokenizer,  captions,discriptions, 0.75, anchor)
+     caption_index=get_caption_index(model,tokenizer,  captions,discriptions, 0.6, anchor)
 # 6) making a json file and saving figure.
      if process_pdf:
           print("processing pdf!")
@@ -57,7 +57,7 @@ for i,paper_id in enumerate(paper_list):
           print("processing latex!")
           json_file= get_meta_data(paper_id,caption_index,captions,discriptions, start_end,figure_json_file_path=f"cache/temp_Images/{paper_id}_metadata.json")
           meta_data.update(json_file)
-     if i == 1000:
+     if i == 4:
           break
      print(meta_data)
      if i==4:

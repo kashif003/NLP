@@ -27,6 +27,7 @@ def encode_sentences(sentences, model, tokenizer, device=DEVICE):
         return_tensors="pt"
     )
     inputs = {k: v.to(device) for k, v in inputs.items()}
+    model.to(device)
     with torch.no_grad():
         outputs = model(**inputs)
     embeddings = outputs.last_hidden_state[:, 0, :]  # (B, 768)
