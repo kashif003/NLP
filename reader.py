@@ -1,74 +1,88 @@
 import fitz  # PyMuPDF
 import os
-from latex_preprocessing import *
-from pdf_preprocessing import *
+from text_preprocessor import *
 import re
 from nltk.tokenize import sent_tokenize
-# reads pdf
+import fitz  # PyMuPDF
+import spacy
+import re
+
+import fitz  # PyMuPDF
+import spacy
+import re
+
 class PdfReader:
     def __init__(self, pdf_path: str):
         self.path = pdf_path
-        self.raw_text= []
-        self.preprocessed_text= None
-        self.figure_details= None
+        self.raw_text = [] 
+        self.figure_details = {}
+        try:
+            self.nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            raise OSError("Please run: python -m spacy download en_core_web_sm")
 
-    def __get_processed_text__(self):
-        if self.preprocessed_text is None:
-            self.preprocess_pdf()
-        return self.preprocessed_text
     def read_pdf(self):
         if self.raw_text:
-            return
-        raw_text= []
+            return self.raw_text
         with fitz.open(self.path) as doc:
-            for i,page in enumerate(doc,1):
-                text=page.get_text("text")
-                raw_text.append((i,text))
-        self.raw_text=raw_text
+            for i, page in enumerate(doc, 1):
+                text = page.get_text("text")
+                self.raw_text.append((i, text))
         return self.raw_text
-    
-    def preprocess_pdf(self):
+
+    def get_caption_discription(self, sentence=10, caption=3):
         self.read_pdf()
-        preprocessor= Pdf_Preprocess(self.raw_text)
-        self.preprocessed_text= preprocessor.process_text()
-        return self.preprocessed_text
-    
-    def get_pages_with_figures(self):
-        self.preprocess_pdf()
-        # Robust figure-detection regex
-        pattern = r'(?i)\bfig(?:ure)?\.?\s*\d+[a-zA-Z]?\b'
-        self.figure_details = []
-        # assume self.raw_text is list of (page_number, page_text)
+        self.figure_details = {}
+        
+        # Regex to capture Figure/Fig and the number separately
+        figure_pattern = r'(?i)\b(Fig(?:ure)?\.?\s*(\d+(?:\.\d+)?))\b'
+
         for page_number, page_text in self.raw_text:
-            matches = re.findall(pattern, page_text)
-            if len(matches)<1:
-                continue
-            self.figure_details.append((page_number, matches))
-        print("Figure details: (page number, [figure/fig matches])\n",self.figure_details)
+            # Process page with spaCy for accurate offsets and sentences
+            doc = self.nlp(page_text)
+            sentences = list(doc.sents)
+            
+            for idx, sent in enumerate(sentences):
+                match = re.search(figure_pattern, sent.text)
+                
+                if match:
+                    # 1. Normalize Key (e.g., Figure_2)
+                    fig_num = match.group(2)
+                    norm_key = f"Figure_{fig_num}"
 
+                    # 2. Extract raw text segments
+                    # Caption: Current sentence + next 1
+                    caption_slice = sentences[idx : idx + caption]
+                    caption_raw = "".join([s.text_with_ws for s in caption_slice]).strip()
 
-    def get_figure_discription(self,sentences=2):
-        self.get_pages_with_figures()
-        result = []
+                    # Description: Current sentence + next 4
+                    desc_slice = sentences[idx : idx + sentence]
+                    description_raw = "".join([s.text_with_ws for s in desc_slice]).strip()
 
-        for page_number, figures in  self.figure_details:
-            previous_page= self.raw_text[page_number-2][1] if page_number > 1 else None
-            next_page= self.raw_text[page_number+2][1] if page_number < len(self.raw_text) else None
+                    # Character offsets relative to the page text
+                    start_pos = desc_slice[0].start_char
+                    end_pos = desc_slice[-1].end_char
 
-            combined_pages = f"{previous_page} {self.raw_text[page_number-1]} {next_page}"
-
-            # tokenize the combined figures
-            sents = sent_tokenize(combined_pages)
-            for idx, sent in enumerate(sents):
-                # Check if sentence contains any figure reference
-                if any(fig in sent for fig in figures):
-                    # Get context sentences
-                    start = max(0, idx - sentences)
-                    end = min(len(sents), idx + sentences + 1)  # +1 because slice is exclusive
-                    snippet = " ".join(sents[start:end])
-                    result.append(snippet)
-
-        return result
+                    # 3. Aggregation Logic
+                    if norm_key not in self.figure_details:
+                        # This is the first time we see the figure (Primary Caption)
+                        self.figure_details[norm_key] = {
+                            "figure_label": f"{fig_num}",
+                            "caption": caption_raw,
+                            "caption_page": page_number,  # The specific page where caption is found
+                            "descriptions": [description_raw],
+                            "start_end_positions": [(start_pos, end_pos)],
+                            "all_pages_mentioned": [page_number]
+                        }
+                    else:
+                        # Append new description and position to existing figure
+                        self.figure_details[norm_key]["descriptions"].append(description_raw)
+                        self.figure_details[norm_key]["start_end_positions"].append((start_pos, end_pos))
+                        
+                        # Add to the list of all pages mentioned if not already there
+                        if page_number not in self.figure_details[norm_key]["all_pages_mentioned"]:
+                            self.figure_details[norm_key]["all_pages_mentioned"].append(page_number)
+        return self.figure_details
 
 
 
@@ -347,7 +361,6 @@ class LatexReader:
 + need to update the caption extraction it is not getting the caption properly on  2404.12603.
 + need the better discription extraction method (get discription based on the sentences.)
 """
-
 
 
 
