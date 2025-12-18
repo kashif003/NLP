@@ -36,7 +36,7 @@ for i,paper_id in enumerate(paper_list):
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.92,
+                                   threshold=0.93,
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:

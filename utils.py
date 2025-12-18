@@ -202,16 +202,10 @@ def clean_for_embeddings(text_input):
     else:
         return process_text(text_input)
 
-from embedding import *
-import torch
 import torch
 import torch.nn.functional as F
 
-def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9):
-    """
-    Compares input text against the quantum circuit anchor.
-    Boosts score by 0.1 if strong quantum keywords are found.
-    """
+def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_boost=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not text_list:
         return False, []
@@ -225,47 +219,47 @@ def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9):
     score_individual_max, _ = torch.max(all_individual_scores, dim=1)
     final_scores = torch.max(score_centroid, score_individual_max)
     score_list = final_scores.tolist()
-    boost_keywords = [
-        "quantum circuit", "quantum gate", "qubit", "qreg", "creg",
-        "hadamard", "cnot", "cx gate", "cz gate", "toffoli", "ccx",
-        "pauli-x", "pauli-z", "rotation gate", "phase shift", "swap gate",
-        "unitary", "ansatz", "entangling layer", "ancilla", "barrier",
-        "measurement basis", "|0>", "|1>", "|+>", "|->",
-        "vqe", "qaoa", "qft", "grover", "shor's", "teleportation",
-        "qiskit", "cirq", "pennylane", "braket"
-    ]
-    boost_amount = 0.1
+    
+    # this list is extracted from the extract_top_keywords(positive_file, top_n=50) in utily.py
+    boost_keywords = boost_keywords = [("quantum", 0.05), ("circuit", 0.05), ("gates", 0.05), ("quantum circuit", 0.1), ("qubits", 0.05), ("consists", 0.05), ("composed", 0.05), ("circuits", 0.05), ("quantum gates", 0.1), ("quantum circuits", 0.1), ("layers", 0.05), ("operations", 0.05), ("unitary", 0.15), ("circuit composed", 0.1), ("sequence", 0.05), ("quantum circuit composed", 0.1), ("twubit", 0.05), ("label", 0.05), ("represented", 0.05), ("gate", 0.05), ("quantum circuit consists", 0.1), ("twubit gates", 0.15), ("applied", 0.05), ("circuit consists", 0.1), ("depth", 0.05), ("number", 0.05), ("brickwork", 0.05), ("consists sequence", 0.15), ("begin", 0.05), ("section", 0.05), ("implement", 0.05), ("sec", 0.05), ("represents", 0.05), ("label sec", 0.15), ("gates consisting", 0.15), ("gates applied", 0.15), ("implemented", 0.05), ("composed twubit gates", 0.15), ("consisting", 0.05), ("cutting", 0.05), ("elementary", 0.05), ("circuit consists sequence", 0.1), ("circuit qubits", 0.1), ("clifford gates", 0.15), ("applied qubits", 0.15), ("approach", 0.05), ("clifford", 0.05), ("cnot", 0.05), ("composed twubit", 0.15), ("theorem", 0.05)]
+
+    boost_keywords.sort(key=lambda x: x[1], reverse=True)
     final_results = []
     has_positive_match = False
     for i, txt in enumerate(text_list):
         current_score = score_list[i]
-        lower_text = txt.lower()
-        is_boosted = False
-        for keyword in boost_keywords:
-            if keyword in lower_text:
-                current_score += boost_amount
-                # Clamp score to max 1.0
-                if current_score > 1.0: current_score = 1.0
-                is_boosted = True
-                break # Apply boost only once per sentence
+        if use_boost:
+            lower_text = txt.lower()
+            for keyword, boost_amt in boost_keywords:
+                if keyword in lower_text:
+                    current_score += boost_amt
+                    if current_score > 1.0: current_score = 1.0
+                    break # Stop after finding the highest value keyword
+        
         final_results.append(current_score)
-        status = "BOOSTED" if is_boosted else "RAW"
-        print(f"[{status}] Score: {current_score:.4f} | Text: {txt[:50]}...")
         if current_score >= threshold:
             has_positive_match = True
     return has_positive_match, final_results
 
+
 def get_caption_index(model, tokenizer, captions, descriptions, threshold, anchor):
     caption_index = []
+    print(f"Scanning {len(captions)} images...")
     for idx, (caption, disc) in enumerate(zip(captions, descriptions)):
-        caption_match, caption_score = compare_embedding(caption, anchor, model, tokenizer, threshold=threshold)
-        disc_match, disc_score = compare_embedding(disc, anchor, model, tokenizer, threshold=threshold)
-
-
+        caption_match, caption_score = compare_embedding(
+            caption, anchor, model, tokenizer, 
+            threshold=threshold, 
+            use_boost=True 
+        )
+        disc_match, disc_score = compare_embedding(
+            disc, anchor, model, tokenizer, 
+            threshold=threshold, 
+            use_boost=False 
+        )
         if caption_match or disc_match:
             caption_index.append(idx)
         else:
-            print("Not found anything")
+            pass
     return caption_index
 
 import re
@@ -377,3 +371,52 @@ def get_scibert_embedding(text_list,model,  tokenizer):
     mean_embeddings = sum_embeddings / sum_mask
 
     return F.normalize(mean_embeddings, p=2, dim=1)
+
+
+
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+import numpy as np
+import nltk
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+def extract_top_keywords(positive_file, top_n=50):
+    # 1. Load Data
+    try:
+        with open(positive_file, "r", encoding='utf-8') as f:
+            pos_text = f.readlines()
+    except FileNotFoundError:
+        print(f"Error: File '{positive_file}' not found.")
+        return []
+    vectorizer = CountVectorizer(
+        ngram_range=(1, 3), 
+        stop_words='english',
+        min_df=2 
+    )
+    try:
+        X = vectorizer.fit_transform(pos_text)
+    except ValueError:
+        print("Error: Input text is too small or contains only stop words.")
+        return []
+    counts = np.asarray(X.sum(axis=0)).flatten()
+    vocab = vectorizer.get_feature_names_out()
+    ranked_indices = np.argsort(counts)[::-1]
+    print("boost_keywords = [")
+    for i in range(min(top_n, len(ranked_indices))):
+        idx = ranked_indices[i]
+        term = vocab[idx]
+        word_count = len(term.split())
+        score = 0.05
+        if word_count == 1:
+            score = 0.05
+        elif "quantum" in term or "circuit" in term:
+            score = 0.10
+        else:
+            score = 0.15
+        strong_single_words = ["qiskit", "cirq", "ansatz", "unitary", "qubit"]
+        if term in strong_single_words:
+            score = 0.15
+        print(f"    (\"{term}\", {score}),")
+    print("]")
+
