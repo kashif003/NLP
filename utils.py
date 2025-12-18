@@ -204,27 +204,63 @@ def clean_for_embeddings(text_input):
 
 from embedding import *
 import torch
-def compare_embedding(text, anchor, model, tokenizer, threshold=0.95):
+import torch
+import torch.nn.functional as F
+
+def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9):
+    """
+    Compares input text against the quantum circuit anchor.
+    Boosts score by 0.1 if strong quantum keywords are found.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if len(text) == 0:
-        return False, 0, None
+    if not text_list:
+        return False, []
+    if isinstance(text_list, str):
+        text_list = [text_list]
+    centroid = anchor['centroid'].to(device)
+    individual_vectors = anchor['individual_vectors'].to(device)
+    embeddings = get_scibert_embedding(text_list, model, tokenizer).to(device)
+    score_centroid = F.cosine_similarity(embeddings, centroid, dim=1)
+    all_individual_scores = torch.mm(embeddings, individual_vectors.transpose(0, 1))
+    score_individual_max, _ = torch.max(all_individual_scores, dim=1)
+    final_scores = torch.max(score_centroid, score_individual_max)
+    score_list = final_scores.tolist()
+    boost_keywords = [
+        "quantum circuit", "quantum gate", "qubit", "qreg", "creg",
+        "hadamard", "cnot", "cx gate", "cz gate", "toffoli", "ccx",
+        "pauli-x", "pauli-z", "rotation gate", "phase shift", "swap gate",
+        "unitary", "ansatz", "entangling layer", "ancilla", "barrier",
+        "measurement basis", "|0>", "|1>", "|+>", "|->",
+        "vqe", "qaoa", "qft", "grover", "shor's", "teleportation",
+        "qiskit", "cirq", "pennylane", "braket"
+    ]
+    boost_amount = 0.1
+    final_results = []
+    has_positive_match = False
+    for i, txt in enumerate(text_list):
+        current_score = score_list[i]
+        lower_text = txt.lower()
+        is_boosted = False
+        for keyword in boost_keywords:
+            if keyword in lower_text:
+                current_score += boost_amount
+                # Clamp score to max 1.0
+                if current_score > 1.0: current_score = 1.0
+                is_boosted = True
+                break # Apply boost only once per sentence
+        final_results.append(current_score)
+        status = "BOOSTED" if is_boosted else "RAW"
+        print(f"[{status}] Score: {current_score:.4f} | Text: {txt[:50]}...")
+        if current_score >= threshold:
+            has_positive_match = True
+    return has_positive_match, final_results
 
-    anchor_embed = anchor.unsqueeze(0).to(device)
-    embeddings = encode_sentences(text, model, tokenizer)
-    score = list(F.cosine_similarity(embeddings, anchor_embed, dim=1))
-    print(score)
-    print("*"*100)
-
-    for  scr in score:
-        if scr.item() >= threshold:
-            return True, score 
-    return False, score
-
-def get_caption_index(model, tokenizer, caption, discriptions, threshold, anchor):
+def get_caption_index(model, tokenizer, captions, descriptions, threshold, anchor):
     caption_index = []
-    for idx, (caption, disc) in enumerate(zip(caption, discriptions)):
+    for idx, (caption, disc) in enumerate(zip(captions, descriptions)):
         caption_match, caption_score = compare_embedding(caption, anchor, model, tokenizer, threshold=threshold)
         disc_match, disc_score = compare_embedding(disc, anchor, model, tokenizer, threshold=threshold)
+
 
         if caption_match or disc_match:
             caption_index.append(idx)
@@ -321,3 +357,23 @@ def get_meta_data( paper_id, caption_index, captions, discriptions, start_end, f
         json_file[f"{paper_id}_{meta_data['fig_number']}.png"] = meta_data
         print("IMAGE SAVED SUCCESSFULLY", meta_data["fig_number"])
     return json_file
+
+
+def get_scibert_embedding(text_list,model,  tokenizer):
+    """
+    Generates normalized sentence embeddings using SciBERT mean pooling.
+    """
+    text_list= clean_for_embeddings(text_list)
+    if not text_list:
+        return torch.tensor([])
+    inputs = tokenizer(text_list, padding=True, truncation=True, return_tensors="pt", max_length=512)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    token_embeddings = outputs.last_hidden_state
+    attention_mask = inputs['attention_mask']
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    mean_embeddings = sum_embeddings / sum_mask
+
+    return F.normalize(mean_embeddings, p=2, dim=1)

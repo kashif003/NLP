@@ -13,25 +13,31 @@ paper_list= paper_ID_extractor(paper_list_path)
 
 tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
 model = AutoAdapterModel.from_pretrained("allenai/scibert_scivocab_uncased")
-# load anchor embeddings
-anchor = torch.load("anchor_embedding_2.pt")
+# laoding anchor embeddings
+anchor = torch.load("Embeddings/positive_anchor.pt")
 
 meta_data= defaultdict(dict)
 for i,paper_id in enumerate(paper_list):
-     time.sleep(3)
      # always give preference to latex
      process_pdf= False
      download_paper(paper_id)
 # 3) getting (caption, fig no, page no) and extracting images from pdf.
      figure_data=get_figure_data(paper_id)
 # 4) gettting (caption, discription, start_end) from the pdf/latex sources.
-     if  process_pdf or  not os.path.exists(f"cache/latex_source/{paper_id}"):  # add not here
+     if  process_pdf or  not os.path.exists(f"cache/latex_source/{paper_id}"):  
           captions, discriptions, start_end,fig_nos,page_number= get_caption_discription(paper_id, pdf_source=process_pdf)
           process_pdf=True
      else:
           captions, discriptions, start_end= get_caption_discription(paper_id, pdf_source=False)
 # 5) compare caption and discriptions and gettting the index of captions. 
-     caption_index=get_caption_index(model,tokenizer,  captions,discriptions, 0.6, anchor)
+     caption_index=get_caption_index(
+                                   model=model,
+                                   tokenizer=tokenizer,
+                                   captions=captions,
+                                   descriptions=discriptions,
+                                   anchor=anchor,
+                                   threshold=0.92,
+                                   )
 # 6) making a json file and saving figure.
      if process_pdf:
           print("processing pdf!")
@@ -39,7 +45,6 @@ for i,paper_id in enumerate(paper_list):
                # Define the source and destination paths for the image
                src_path = os.path.join("cache/temp_Images", f"{paper_id}_{fig_nos[idx_value]}.png")
                dst_path = os.path.join("quantum_circuit_images", f"{paper_id}_{fig_nos[idx_value]}.png")
-
                # Check if the source image exists before proceeding
                if not os.path.exists(src_path):
                     print(f"UNABLE TO LOCATE IMAGE AT: {src_path}")
@@ -64,16 +69,10 @@ for i,paper_id in enumerate(paper_list):
           print("processing latex!")
           json_file= get_meta_data(paper_id,caption_index,captions,discriptions, start_end,figure_json_file_path=f"cache/temp_Images/{paper_id}_metadata.json")
           meta_data.update(json_file)
-     if i == 1:
+     print("NUMBER OF PAPERS CHECKED:",i+1)
+     if len(meta_data) == 5:
           break
-     print(meta_data)
-     if i==4:
-          break
-
-import json
-
-with open("output.json", "w", encoding="utf-8") as f:
-    json.dump(meta_data, f, ensure_ascii=False, indent=4)
-
-
+# with open("output.json", "w", encoding="utf-8") as f:
+#     json.dump(meta_data, f, ensure_ascii=False, indent=4)
+print(len(meta_data))
 print(meta_data)
