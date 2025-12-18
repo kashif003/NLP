@@ -1,304 +1,97 @@
 {
-    "2509.04140_1.png": {
-        "fig_number": "1",
-        "page_number": 2,
-        "description": [
-            "a qkd network qkdn consists of interconnected nodes linked via optical fiber or free space channels to execute qkd protocols. qkdns are considered a key step towards the realization of the quantum internet a future global network of quantum information processors designed to interconnect next generation quantum computers. conceived as a complement to the classical internet the quantum internet will enable end to end qkd and support novel network functionalities beyond those of today’s communication systems . to take full advantage of the benefits offered by qkd protocols while ensuring efficient key management storage and integration with classical infrastructure it is essential to design a layered architecture tailored to this emerging technology see <Reference> . various approaches have been proposed as the design of qkd network architectures remains an open topic and a dedicated etsi report is expected by the end of 2025 . nonetheless there is broad consensus on including qkdn management and control layers between the user or application layer and the physical infrastructure. these two intermediate layers coordinate the dynamic operation and overall supervision of the network by handling session control key relay routing link configuration performance monitoring and enforcement of security and quality policies ."
-        ],
-        "start_end": [
-            [
-                8163,
-                9733
-            ]
-        ],
-        "arxiv_id": "2509.04140"
-    },
-    "2509.04140_3.png": {
-        "fig_number": "3",
-        "page_number": 6,
-        "description": [
-            "these theoretical models characterize the non ideal behavior of the complete quantum transmission process. however in order to successfully execute qkd protocols we had to address other technical issues common in experimental setups such as timing jitter. this includes random variations in the arrival time of photons during transmission which we model as a gaussian random variable with a mean value of and standard deviation where is a fixed parameter. we also simulated the timing jitter of the single photon detector spd which represents the delay between photon arrival and measurement . this is modeled by setting a value for the detection delay parameter in bobs detection unit. additionally we accounted for the detectors dead time the period immediately following a photon detection during which the detector is unable to register subsequent events. these timing constraints raise a second critical concern: synchronization between alice and bob. as previously mentioned bob activates his detector for a specific period . proper synchronization ensures that bob correlates this time window with the expected photon arrival time and adjusts the window width based on the channels timing jitter applying a coverage factor such that . moreover synchronization of photon emission and detection sets a lower bound for the emission repetition time . alice selects her value of based on this lower bound: . where and are the gate duration of alices and bobs quantum processors respectively. this formula should take into account the physical limitations of the device as real spss used for qkd typically operate at repetition rates on the order of 1 ghz . however for the sake of simplicity these considerations have been omitted in this work. in order to properly synchronize with each other alice and bob need information about some characteristic parameters of the channel and their devices as shown above. see <Reference> for an explanation of the synchronization process and the calculation of ."
-        ],
-        "start_end": [
-            [
-                36520,
-                39147
-            ]
-        ],
-        "arxiv_id": "2509.04140"
-    },
-    "2509.04140_5.png": {
-        "fig_number": "5",
-        "page_number": 12,
-        "description": [
-            "in this section we present the final results on the performance of our variable length version of bb84 introduced in sect. and the proposed strategies for meeting predefined output length requirements discussed in sect. . to do so we first define the parameters typically used to evaluate this behavior. one such parameter is the protocol success probability defined as the probability that the protocol does not abort after parameter estimation. in our case we estimate this quantity using eq. as p success p q q t where and is the cdf of the standard normal distribution. another relevant parameter is the key bit rate kbr the number of secret output key bits generated per use of the quantum channel. we define it as: m/n p 0 1 p we estimate its average value and standard deviation as: p success m / n . these values can be calculated considering tab. to solve eq. numerically and find and to calculate taking eq. . in <Reference> we represent the performance of our protocol variant presented in sect. . to simulate it we use for the quantum phase while the post processing is handled using third party libraries . we plot the simulation results for the and in terms of the link distance and compare them with the theoretical expectations. the resulting plot shows good agreement between simulation and theory. it reveals that the kbr is heavily limited by channel attenuation and drops to zero as approaches the threshold . it also shows that the effective maximum distance is shorter than the asymptotic limit vertical red dashed line due to finite key size effects."
-        ],
-        "start_end": [
-            [
-                67771,
-                70364
-            ]
-        ],
-        "arxiv_id": "2509.04140"
-    },
-    "2509.04140_6.png": {
-        "fig_number": "6",
-        "page_number": 12,
-        "description": [
-            "having obtained a benchmark for the performance of our simulation setup and compared it with the theoretically expected behavior we will now test our reverse analysis approach. fixing a value for the required output key length we use eqs. and to calculate the minimum number of photons needed to obtain such value for each parameter estimation strategy and in terms of the distance obtaining . these quantities are represented in <Reference> for and bits required as output. performance of our reverse analysis fixing as the required output key length and simulating the qkd protocol using . output key length results are shown in subfigures a and b for and respectively. the violet series represents the case of the bare minimum number of photons computed for strategy without applying restriction . for each link distance we perform protocol simulations to obtain the mean output and its standard deviation represented as error bars. subfigures c and d show the simulated protocol duration accounting for both the quantum transmission and classical post processing stages. subfigures e and f present the corresponding kbr in bits/s. in all subplots the limit distance is marked as a vertical red dashed line. the three parameter estimation strategies are clearly distinguished using the same color scheme as in <Reference>. all simulations were carried out using the parameters listed in table . using them for initialization we will run the full qkd protocol to represent the output key length for and test if the inequality holds with the desired level of confidence. the results are shown in <Reference> which supports our main premise: a single execution of the protocol must yield at least secret key bits as specified by the user so that re execution is not needed. we observe that all three strategies behave similarly producing at least bits in most cases. strategy tends to overperform at short distances where our analysis is prioritizing an accurate estimation of the qber using eq. . on the other hand strategies and align more closely with the output length requirement across both short and long distances although they yield slightly lower kbr values. we also observe that they are marginally more efficient than strategy as the link distance approaches . a more detailed analysis shows that strategy slightly outperforms strategy in terms of kbr while still meeting the output length requirement. this is because strategy uses a fixed number of bits for parameter estimation chosen to be the minimum needed for an accurate estimation of the qber.",
-            "having obtained a benchmark for the performance of our simulation setup and compared it with the theoretically expected behavior we will now test our reverse analysis approach. fixing a value for the required output key length we use eqs. and to calculate the minimum number of photons needed to obtain such value for each parameter estimation strategy and in terms of the distance obtaining . these quantities are represented in <Reference> for and bits required as output. performance of our reverse analysis fixing as the required output key length and simulating the qkd protocol using . output key length results are shown in subfigures a and b for and respectively. the violet series represents the case of the bare minimum number of photons computed for strategy without applying restriction . for each link distance we perform protocol simulations to obtain the mean output and its standard deviation represented as error bars. subfigures c and d show the simulated protocol duration accounting for both the quantum transmission and classical post processing stages. subfigures e and f present the corresponding kbr in bits/s. in all subplots the limit distance is marked as a vertical red dashed line. the three parameter estimation strategies are clearly distinguished using the same color scheme as in <Reference>. all simulations were carried out using the parameters listed in table . using them for initialization we will run the full qkd protocol to represent the output key length for and test if the inequality holds with the desired level of confidence. the results are shown in <Reference> which supports our main premise: a single execution of the protocol must yield at least secret key bits as specified by the user so that re execution is not needed. we observe that all three strategies behave similarly producing at least bits in most cases. strategy tends to overperform at short distances where our analysis is prioritizing an accurate estimation of the qber using eq. . on the other hand strategies and align more closely with the output length requirement across both short and long distances although they yield slightly lower kbr values. we also observe that they are marginally more efficient than strategy as the link distance approaches . a more detailed analysis shows that strategy slightly outperforms strategy in terms of kbr while still meeting the output length requirement. this is because strategy uses a fixed number of bits for parameter estimation chosen to be the minimum needed for an accurate estimation of the qber."
-        ],
-        "start_end": [
-            [
-                72370,
-                75520
-            ],
-            [
-                72370,
-                75520
-            ]
-        ],
-        "arxiv_id": "2509.04140"
-    },
-    "2509.04140_7.png": {
-        "fig_number": "7",
-        "page_number": 13,
-        "description": [
-            "having obtained a benchmark for the performance of our simulation setup and compared it with the theoretically expected behavior we will now test our reverse analysis approach. fixing a value for the required output key length we use eqs. and to calculate the minimum number of photons needed to obtain such value for each parameter estimation strategy and in terms of the distance obtaining . these quantities are represented in <Reference> for and bits required as output. performance of our reverse analysis fixing as the required output key length and simulating the qkd protocol using . output key length results are shown in subfigures a and b for and respectively. the violet series represents the case of the bare minimum number of photons computed for strategy without applying restriction . for each link distance we perform protocol simulations to obtain the mean output and its standard deviation represented as error bars. subfigures c and d show the simulated protocol duration accounting for both the quantum transmission and classical post processing stages. subfigures e and f present the corresponding kbr in bits/s. in all subplots the limit distance is marked as a vertical red dashed line. the three parameter estimation strategies are clearly distinguished using the same color scheme as in <Reference>. all simulations were carried out using the parameters listed in table . using them for initialization we will run the full qkd protocol to represent the output key length for and test if the inequality holds with the desired level of confidence. the results are shown in <Reference> which supports our main premise: a single execution of the protocol must yield at least secret key bits as specified by the user so that re execution is not needed. we observe that all three strategies behave similarly producing at least bits in most cases. strategy tends to overperform at short distances where our analysis is prioritizing an accurate estimation of the qber using eq. . on the other hand strategies and align more closely with the output length requirement across both short and long distances although they yield slightly lower kbr values. we also observe that they are marginally more efficient than strategy as the link distance approaches . a more detailed analysis shows that strategy slightly outperforms strategy in terms of kbr while still meeting the output length requirement. this is because strategy uses a fixed number of bits for parameter estimation chosen to be the minimum needed for an accurate estimation of the qber.",
-            "<Reference> supports our main premise: a single execution of the protocol must yield at least secret key bits as specified by the user so that re execution is not needed. however in deriving eqs. and we imposed a second requirement: the qber must be estimated with sufficient accuracy see eq. . we observed that this constraint becomes more restrictive at shorter link distances even though we defined to reduce its impact. in such scenarios the number of secret bits generated often exceeds by a large margin. this raises a relevant question: is our strategy still efficient under these conditions? could we for instance introduce controlled amounts of additional noise to slightly increase the qber making it easier to estimate accurately while potentially requiring fewer initial photons? this is an interesting point since introducing artificial noise would indeed lower the number of photons needed at the shortest distances while photon losses would remain unchanged. the trade offs would be a smaller value of since cascade requires more parity checks to correct more errors and therefore exposes more key information and the need for additional processing to recover the true qber of the quantum channel from the artificially altered raw keys. preliminary tests show that this approach can substantially reduce at the smallest link distances. however a more thorough analysis is necessary to confirm and complete these results. this would overly extend the scope of this thesis and is left for future research. the answer would be affirmative if after execution only bits were delivered to the user and the remaining bits were discarded. however this is not the case as the key manager stores any excess key material for future use. in this context artificially increasing the qber would lower the key bit rate kbr ultimately making the protocol less efficient. therefore preserving the original noise level remains the more practical and resource conscious approach."
-        ],
-        "start_end": [
-            [
-                72370,
-                75520
-            ],
-            [
-                75522,
-                77658
-            ]
-        ],
-        "arxiv_id": "2509.04140"
-    },
-    "2404.12603_5.png": {
-        "fig_number": "5",
-        "page_number": 3,
-        "description": [
-            "because some quantum algorithms leverage measurement in different bases qwerty defines measurement in terms of a basis. for example is a one qubit measurement that returns one classical bit. measuring in more exotic bases is possible such as measuring in the qubit fourier basis with or measuring in the bell basis as seen on lines of <Reference>. ultimately any compiles to a basis translation >> . followed by",
-            "we briefly define some basis translation syntactic sugar because it is used in most of the example code in this paper. if a basis translation involves bases with only one vector such as >> 1 . the qwerty compiler allows writing >> 1 . instead as seen on line of <Reference>. to make a basis translation more closely resemble a substitution rule a basis translation such as >> 1 0 . may be written as 1>>0 . instead as seen on line of <Reference>.",
-            "we briefly define some basis translation syntactic sugar because it is used in most of the example code in this paper. if a basis translation involves bases with only one vector such as >> 1 . the qwerty compiler allows writing >> 1 . instead as seen on line of <Reference>. to make a basis translation more closely resemble a substitution rule a basis translation such as >> 1 0 . may be written as 1>>0 . instead as seen on line of <Reference>.",
-            "since superposition is a crucial ingredient of quantum algorithms and allows expressing qubit states in full generality qwerty includes a . for example 1 . represents the state the most common use of the superposition literal in qwerty code is to prepare a bell state with 11 . as seen on line of <Reference> but superposition literals also allow tracing qwerty programs without bra ket notation. to make this tracing feasible the superposition literal also supports specifying probabilities e.g. 0.25*1 .."
-        ],
-        "start_end": [
-            [
-                10188,
-                10887
-            ],
-            [
-                10889,
-                11524
-            ],
-            [
-                10889,
-                11524
-            ],
-            [
-                31605,
-                32353
-            ]
-        ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_7.png": {
-        "fig_number": "7",
-        "page_number": 5,
-        "description": [
-            "in general any syntax in qwerty code is using a metaqwerty macro named . for example the definition of the macro is found in the prelude on line of <Reference>. the prelude also defines abbreviated names for programming convenience such as line of <Reference> which allows an qubit measurement in the computational basis to be written as instead of e.g. line of <Reference> . similarly line of <Reference> enables programmers to write to perform a bit flip instead of the more verbose line of <Reference> shortens the common case further to just",
-            "in general any syntax in qwerty code is using a metaqwerty macro named . for example the definition of the macro is found in the prelude on line of <Reference>. the prelude also defines abbreviated names for programming convenience such as line of <Reference> which allows an qubit measurement in the computational basis to be written as instead of e.g. line of <Reference> . similarly line of <Reference> enables programmers to write to perform a bit flip instead of the more verbose line of <Reference> shortens the common case further to just",
-            "in general any syntax in qwerty code is using a metaqwerty macro named . for example the definition of the macro is found in the prelude on line of <Reference>. the prelude also defines abbreviated names for programming convenience such as line of <Reference> which allows an qubit measurement in the computational basis to be written as instead of e.g. line of <Reference> . similarly line of <Reference> enables programmers to write to perform a bit flip instead of the more verbose line of <Reference> shortens the common case further to just",
-            "in general any syntax in qwerty code is using a metaqwerty macro named . for example the definition of the macro is found in the prelude on line of <Reference>. the prelude also defines abbreviated names for programming convenience such as line of <Reference> which allows an qubit measurement in the computational basis to be written as instead of e.g. line of <Reference> . similarly line of <Reference> enables programmers to write to perform a bit flip instead of the more verbose line of <Reference> shortens the common case further to just",
-            "lines of <Reference> define the qubit fourier basis which is vital for quantum algorithms such as period finding section . as seen in <Reference> the fourier basis has a recursive structure: the qubit fourier basis can be constructed by concatenating the full list of qubit fourier basis vectors with itself and then extending each resulting vector with a superposition of and a revolving the revolving is accomplished by gradually increasing the tilt of in units of degrees; the rightmost box in <Reference> shows the list of these superpositions when . qwerty represents this list of superpositions efficiently as a . basis generators allow constructing bases in more complex ways than taking the tensor product of smaller bases. the knowledge of basis structure in the compiler provided by basis generators allows efficient synthesis of basis translations as e.g. efficient quantum fourier transform circuits. lines of <Reference> define the qubit fourier basis recursively by using the operator to apply the basis generator to the basis line of <Reference> defines the single qubit fourier basis the base case for the recursive definition.",
-            "lines of <Reference> define the qubit fourier basis which is vital for quantum algorithms such as period finding section . as seen in <Reference> the fourier basis has a recursive structure: the qubit fourier basis can be constructed by concatenating the full list of qubit fourier basis vectors with itself and then extending each resulting vector with a superposition of and a revolving the revolving is accomplished by gradually increasing the tilt of in units of degrees; the rightmost box in <Reference> shows the list of these superpositions when . qwerty represents this list of superpositions efficiently as a . basis generators allow constructing bases in more complex ways than taking the tensor product of smaller bases. the knowledge of basis structure in the compiler provided by basis generators allows efficient synthesis of basis translations as e.g. efficient quantum fourier transform circuits. lines of <Reference> define the qubit fourier basis recursively by using the operator to apply the basis generator to the basis line of <Reference> defines the single qubit fourier basis the base case for the recursive definition.",
-            "lines of <Reference> define the qubit fourier basis which is vital for quantum algorithms such as period finding section . as seen in <Reference> the fourier basis has a recursive structure: the qubit fourier basis can be constructed by concatenating the full list of qubit fourier basis vectors with itself and then extending each resulting vector with a superposition of and a revolving the revolving is accomplished by gradually increasing the tilt of in units of degrees; the rightmost box in <Reference> shows the list of these superpositions when . qwerty represents this list of superpositions efficiently as a . basis generators allow constructing bases in more complex ways than taking the tensor product of smaller bases. the knowledge of basis structure in the compiler provided by basis generators allows efficient synthesis of basis translations as e.g. efficient quantum fourier transform circuits. lines of <Reference> define the qubit fourier basis recursively by using the operator to apply the basis generator to the basis line of <Reference> defines the single qubit fourier basis the base case for the recursive definition."
-        ],
-        "start_end": [
-            [
-                16062,
-                17016
-            ],
-            [
-                16062,
-                17016
-            ],
-            [
-                16062,
-                17016
-            ],
-            [
-                16062,
-                17016
-            ],
-            [
-                17018,
-                18636
-            ],
-            [
-                17018,
-                18636
-            ],
-            [
-                17018,
-                18636
-            ]
-        ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_8.png": {
-        "fig_number": "8",
-        "page_number": 5,
-        "description": [
-            "finally the type system must also account for taking the adjoint of a function or predicating it. typing for these operations on reversible functions is handled by the rules in <Reference>. the rule verifies that the number of target qubits vector atoms matches the number of qubits expected by both function operands. also checks that the predicating basis is nontrivial contains vector atoms other than and since predication in must apply the two functions supplied to disjoint subspaces. a trivial basis such as fails to identify any subspace at all so it cannot be a predicate. the notation used in this check means the indices of all vector atoms in that are equal to none of the s i.e. all indices in the list except those in the list . the syntax represents the number of qubits for a basis and is defined in <Reference>."
-        ],
-        "start_end": [
-            [
-                88734,
-                89997
-            ]
-        ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_3.png": {
-        "fig_number": "3",
-        "page_number": 3,
-        "description": [
-            "in the language of quantum mechanics superposition literals represent pure states but it can be useful to describe mixed states when tracing qwerty programs that is a classical probability distribution of pure states. for example if the right qubit of the entangled state mm . were discarded one could describe the remaining left qubit using the qwerty m .. <Reference> shows how the mixed state m . differs from the pure superposition state m .: states in a pure superposition can destructively interfere <Reference> whereas states in an ensemble <Reference> cannot. for both superposition and ensemble literals the qwerty type checker guarantees that probabilities sum to and that all state operands are orthogonal."
-        ],
-        "start_end": [
-            [
-                32355,
-                33237
-            ]
-        ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_1.png": {
-        "fig_number": "1",
-        "page_number": 1,
-        "description": [
-            "qwerty differs from many other quantum languages in three aspects: are expressed through basis translations instead of low level circuitry; quantum program behavior can be without physics notation; and both on qubits and on classical bits either inside or outside qubit lifetime. figure <Reference> illustrates these differences by comparing the diffusion step of grovers search algorithm in circuitry versus in qwerty. the qwerty code directly expresses replace with whereas the circuit implementation requires significantly more explanation and expertise to understand."
-        ],
-        "start_end": [
-            [
-                36179,
-                37075
-            ]
-        ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_2.png": {
+    "2509.03389_2.png": {
         "fig_number": "2",
-        "page_number": 2,
+        "page_number": 3,
         "description": [
-            "qwerty functions annotated with that contain qwerty code and run on a quantum accelerator may be treated as if they were python functions e.g. the call on line of <Reference> . classical pre or post processing may be written in python and make use of third party python libraries e.g. or qwerty runtime libraries for continued fractions or registers of classical bits while evolving the whole state space of a qubit is useful quantum algorithms often require performing some state evolution only in a proper subspace. in circuit oriented programming this is typically performed by adding controls on gates or functions which makes them execute only when all control qubits are . qwerty generalizes controls allowing programmers to run functions only on states where a is satisfied. these predications are written such that they resemble classical conditional expressions. for example if 1 else id . will flip the right qubit if the left is a otherwise the identity is applied to the right qubit. thus flip if 1 else id . yields and flip if 1 else id . yields an unchanged state the symbol is specific to basis patterns.",
-            "quantum phase estimation qpe written in qwerty <Reference> shows nontrivial basis patterns in action. the qpe algorithm approximates how much a black box operation tilts a particular state by constructing a fourier basis state a row of <Reference> and then measuring in the fourier basis. it is crucial that for any nonnegative integer can effectively be repeated times efficiently; for instance line of the example qpe caller code in <Reference> satisfies this requirement by adjusting the rotation that performs to achieve the same affect as repeating times. using qwerty syntax <Reference> traces through how lines of <Reference> construct the desired fourier basis state by tilting the in each of the three initial states. the left three qubits at the end of <Reference> are exactly the three qubit fourier basis state found on the third to last row of <Reference>. because the third to last row has index 5 in the list of basis vectors the measurement on line of <Reference> yields the bits . thus the calculation of on line of <Reference> produces which is exactly the angle originally written on line of <Reference>. in less ideal cases the measurement will project the state to the nearest fourier basis state with high probability providing a reasonable approximation.",
-            "quantum phase estimation qpe written in qwerty <Reference> shows nontrivial basis patterns in action. the qpe algorithm approximates how much a black box operation tilts a particular state by constructing a fourier basis state a row of <Reference> and then measuring in the fourier basis. it is crucial that for any nonnegative integer can effectively be repeated times efficiently; for instance line of the example qpe caller code in <Reference> satisfies this requirement by adjusting the rotation that performs to achieve the same affect as repeating times. using qwerty syntax <Reference> traces through how lines of <Reference> construct the desired fourier basis state by tilting the in each of the three initial states. the left three qubits at the end of <Reference> are exactly the three qubit fourier basis state found on the third to last row of <Reference>. because the third to last row has index 5 in the list of basis vectors the measurement on line of <Reference> yields the bits . thus the calculation of on line of <Reference> produces which is exactly the angle originally written on line of <Reference>. in less ideal cases the measurement will project the state to the nearest fourier basis state with high probability providing a reasonable approximation.",
-            "quantum phase estimation qpe written in qwerty <Reference> shows nontrivial basis patterns in action. the qpe algorithm approximates how much a black box operation tilts a particular state by constructing a fourier basis state a row of <Reference> and then measuring in the fourier basis. it is crucial that for any nonnegative integer can effectively be repeated times efficiently; for instance line of the example qpe caller code in <Reference> satisfies this requirement by adjusting the rotation that performs to achieve the same affect as repeating times. using qwerty syntax <Reference> traces through how lines of <Reference> construct the desired fourier basis state by tilting the in each of the three initial states. the left three qubits at the end of <Reference> are exactly the three qubit fourier basis state found on the third to last row of <Reference>. because the third to last row has index 5 in the list of basis vectors the measurement on line of <Reference> yields the bits . thus the calculation of on line of <Reference> produces which is exactly the angle originally written on line of <Reference>. in less ideal cases the measurement will project the state to the nearest fourier basis state with high probability providing a reasonable approximation.",
-            "as discussed in section the compiler will expand the the construct on line of <Reference> into a pipeline with substituted with and in the first second and third stages of the pipeline respectively. the qwerty qpe code expects that is defined in terms of a dimension variable say that determines that should be applied effectively times. lines of <Reference> display an example of this. this is useful because the on line of <Reference> also a metaqwerty feature will summon a specialization of with its dimension variable set to . if is implemented correctly this will synthesize a version of that effectively runs itself times.",
-            "as discussed in section the compiler will expand the the construct on line of <Reference> into a pipeline with substituted with and in the first second and third stages of the pipeline respectively. the qwerty qpe code expects that is defined in terms of a dimension variable say that determines that should be applied effectively times. lines of <Reference> display an example of this. this is useful because the on line of <Reference> also a metaqwerty feature will summon a specialization of with its dimension variable set to . if is implemented correctly this will synthesize a version of that effectively runs itself times.",
-            "",
-            "qwerty based visualization of how the example quantum phase estimation program in <Reference> constructs the desired fourier basis state quantum computers have leaped from the theoretical realm into a race to large scale implementations. this is due to the promise of revolutionary speedups where achieving such speedup requires designing an algorithm that harnesses the structure of a problem using quantum mechanics. yet many quantum programming languages today require programmers to reason at a low level of physics notation and quantum gate circuitry. this presents a significant barrier to entry for programmers who have not yet built up an intuition about quantum gate semantics and it can prove to be tedious even for those who have. in this paper we present qwerty a new quantum programming language that allows programmers to manipulate qubits more expressively than gates and trace programs without bra ket notation. due to its novel basis type and easy interoperability with python qwerty is a powerful framework for high level quantum classical computation."
+            "the system is operated by driving the two qubits locally the control hamiltonian w i t as drive changes the parity the control hamiltonian is off diagonal in the invariant subspace representation of table see app. . we now introduce a reference scenario where ideal stirap can be operated. for the sake of simplicity we take identical qubits so that the odd eigenstates are bell states their energy splitting reducing to . then if the system is driven symmetrically a selection rule is enforced implying that the antisymmetric bell state is not coupled to the complementary subspace . thus the driven dynamics is confined to a three level system. as the drive doesnt commute with it implements the so called ladder configuration shown in . we anticipate that non ideal features emerging when lifting the above assumptions preserve or even improve the functionality of the noise sensor. to implement ideal stirap the control is operated by a two tone field w t t t where is resonant with the transition and with the transition are slowly varying pulse envelopes and . here we use gaussian with width see app. . the full hamiltonian reads h s 0 2 2 3 w t 2 to make explicit contact with stirap we introduce a doubly rotating frame and neglect terms of the drive oscillating at frequencies much larger than . in the new frame the control hamiltonian is approximated as see app. c t . the standard rotating wave approximation rwa is obtained by eliminating the terms that oscillate with frequency which would be accurate when . in this limit the control eq. implements the usual 3 level ladder configuration see <Reference> admitting as an eigenvector a dark state i.e. a coherent superposition of and . its adiabatic dynamics see eq. under a counterintuitive pulse sequence where is delayed by a time with respect to see eq. implements the ideal 3 level stirap protocol see app. which results in coherent population transfer . during ideal stirap the intermediate state is never populated due to destructive interference. this scenario is also substantially valid under the action of the full hamiltonian eq as shown in <Reference>. t . energy levels of the two qubit sensor for identical single qubit splittings and symmetric driving. the highlighted transition implements a ladder driving configuration see eq. . the noise we consider local noise affecting the level splittings of each qubit which is modeled by the hamiltonian 2 where for are classical stochastic processes . this model accounts for the main mechanism degrading coherence during the adiabatic passage phase of population transfer which is the heart of the quantum sensing protocol. physically it may arise in many cases in particular by such as charge noise e g 0.5 t 2000 0.7 t",
+            "the unitary transformation to the doubly rotating frame used to derive eq. is given by u x t e it 1 e i t 2 . the frequencies of the drives are taken as 2 2 where and are the detunings. denoting with the full hamiltonian eq. and transforming to the rotating frame we obtain t 1 h. c. where and . since we can neglect fastly oscillating terms obtaining t 2 h. c. if both the drives are resonant we obtain the hamiltonian eq. presenting a time dependent term oscillating at a frequency . stirap stirap is a protocol yielding efficient and robust population transfer in a three level system. we design our system such as stirap is operated in see <Reference> . the system is driven by two time dependent classical fields: the pulse drives the transition while the pulse drives the transition . the hamiltonian in an appropriate rotating frame reads h t 2 2 1 where and are the single and two photon detunings respectively and and are the frequencies of pump and stokes fields respectively. for efficient population transfer it is crucial to operate at small two photon detuning . in particular under two photon resonance admits the so called dark state as an instantaneous eigenstate with . if the pulses are shined in a sequence is applied before while ensuring that they overlap for part of the protocol then smoothly varies from to . when the system is initialized in the state if the evolution remains adiabatic the system will follow the dark state reaching the desired target state at the final time ."
         ],
         "start_end": [
             [
-                137876,
-                139432
+                16316,
+                23285
             ],
             [
-                142598,
-                144282
-            ],
-            [
-                142598,
-                144282
-            ],
-            [
-                142598,
-                144282
-            ],
-            [
-                144284,
-                145284
-            ],
-            [
-                144284,
-                145284
-            ],
-            [
-                145572,
-                146076
-            ],
-            [
-                146078,
-                147369
+                48319,
+                52882
             ]
         ],
-        "arxiv_id": "2404.12603"
+        "arxiv_id": "2509.03389"
     },
-    "2404.12603_13.png": {
+    "2502.17725_1.png": {
+        "fig_number": "1",
+        "page_number": 3,
+        "description": [
+            "we initialize an arbitrary set of angles between 0 and 2 which are passed through a classical cobyla optimizer to determine the optimal set of angles. for a 4 node tsp a 16 qubit circuit is initialized as the qubit requirement scales as n2 the values pass through a quantum circuit with a depth of 6 layers. therefore there are 96 angles serving as hyperparameters for optimization. the output is then measured. figure <Reference> illustrates a single layer of the six layer qaoa quantum circuit where the hyperparameters are encoded into the r y rotation gates."
+        ],
+        "start_end": [
+            [
+                12949,
+                13556
+            ]
+        ],
+        "arxiv_id": "2502.17725"
+    },
+    "2509.08408_2.png": {
+        "fig_number": "2",
+        "page_number": 3,
+        "description": [
+            "connecting two atom photon gates as shown in <Reference> allows performing a controlled phase flip gate between two remote atomic qubits in different cavities. the initial state of the system is . after performing the final hadamard gate on the photon the state reads and the photon polarization is measured. in the case of a measurement outcome the gate sequence is finished and the desired atom atom unitary is achieved. for a outcome an additional gate must be performed on the first qubit. it is important to note that in the physical implementation shown in <Reference> b the final state of the system is modified according to . in other words in the case of a outcome in the final photon measurement the targeted atoms acquire an additional phase of since the phase flip in the cz gates occurs if the respective atom is in the state. this phase needs to be taken into account when performing several gates in a row on different qubits in the distributed architecture. a common measure of how well a quantum process approximates a certain desired unitary operation such as a quantum logic gate is the average fidelity f d where stands for the completely positive and trace preserving cptp map describing the quantum process and the integral over all pure states in the underlying hilbert space is defined such that . equation is generally difficult to evaluate for arbitrary quantum systems. however the average fidelity can be related to a similar quantity the entanglement or process fidelity which is typically easier to compute and describes how well entanglement to a separate system is preserved after applying . the entanglement fidelity is defined as f with the identity and a maximally entangled bipartite state in the originally dimensional hilbert space with numbered basis states on which the choi operator acts according to . the connection between average and entanglement fidelity is then given by f 1 d 1 .",
+            "connecting two atom photon gates as shown in <Reference> allows performing a controlled phase flip gate between two remote atomic qubits in different cavities. the initial state of the system is . after performing the final hadamard gate on the photon the state reads and the photon polarization is measured. in the case of a measurement outcome the gate sequence is finished and the desired atom atom unitary is achieved. for a outcome an additional gate must be performed on the first qubit. it is important to note that in the physical implementation shown in <Reference> b the final state of the system is modified according to . in other words in the case of a outcome in the final photon measurement the targeted atoms acquire an additional phase of since the phase flip in the cz gates occurs if the respective atom is in the state. this phase needs to be taken into account when performing several gates in a row on different qubits in the distributed architecture. a common measure of how well a quantum process approximates a certain desired unitary operation such as a quantum logic gate is the average fidelity f d where stands for the completely positive and trace preserving cptp map describing the quantum process and the integral over all pure states in the underlying hilbert space is defined such that . equation is generally difficult to evaluate for arbitrary quantum systems. however the average fidelity can be related to a similar quantity the entanglement or process fidelity which is typically easier to compute and describes how well entanglement to a separate system is preserved after applying . the entanglement fidelity is defined as f with the identity and a maximally entangled bipartite state in the originally dimensional hilbert space with numbered basis states on which the choi operator acts according to . the connection between average and entanglement fidelity is then given by f 1 d 1 .",
+            "for the remote atom atom gate depicted in <Reference> only the atoms contained in the respective cavity must be considered when calculating the overall coupling strength for each of the two cavity reflections. just as with the atom photon gate the photonic basis states also include both horizontal and vertical components in this case. in order to perform the final conditional gate on qubit 1 we project the density matrix at the end of the gate sequence onto both polarization components and only apply an additional gate on qubit 1 in the vertical component before eventually tracing out the photon according to p with the projection operators . the gate on qubit 1 is denoted as and is the dimensional identity. due to the final gate only being applied conditional on the photon measurement outcome the remote atom atom gate is automatically post selected since ignoring dark counts a photon detection at the final step signals a successful gate operation.",
+            "for calculating the fidelity of the remote gate in a similar fashion we first determine the state of the photon after the gate sequence in <Reference> which reads p 2 r r r 1 r r r 1 where denotes the reflection coefficient of cavity . note that this expression is only valid for sufficiently long photon pulses with negligible pulse delay between the and components as stated earlier. further assuming identical cavities and using as the atomic state as before we find f 2 with the individual terms given by f 4 r 0 2 2r 0 1 2 2 r 1 r 0 r 1 r 0 1 2 r 1 2 2r 1 1 2 f 4 r 0 2 1 2 r 1 r 0 r 1 r 0 1 2 r 1 r 0 r 0 r 1 1 2 r 1 2 1 2 and using the same function as in eq. . in this section we will first present the system performance for local and remote gates in terms of average gate fidelity success probability and pauli error rates for the baseline case of atoms. we then examine how this performance deteriorates if further atoms are added to the cavity without any addressing or targeting measures before finally determining the strength of the addressing required to achieve the baseline performance even in the many body case."
+        ],
+        "start_end": [
+            [
+                17985,
+                22755
+            ],
+            [
+                17985,
+                22755
+            ],
+            [
+                42912,
+                44363
+            ],
+            [
+                50581,
+                52784
+            ]
+        ],
+        "arxiv_id": "2509.08408"
+    },
+    "2509.08408_10.png": {
+        "fig_number": "10",
+        "page_number": 10,
+        "description": [
+            "and app. for calculation details. all non dephasing error rates are zero resulting in an infinitely biased noise model. note the linear scale compared to <Reference>. the pauli error rates for the same exemplary case with equal coupling strengths of cavity decay rate and without any addressing are shown in <Reference> for . as before only the dephasing error rates and are nonzero and therefore they are still representing an infinitely biased noise model. however due to the lack of qubit targeting they now have the same order of magnitude as with comparable error rates for both the local and remote gate. finally in this section we want to determine how strongly the effective cavity coupling of the non targeted atoms has to be suppressed in order to restore the baseline performance and translate this to addressing requirements for the control and target qubit in the physical setup presented in subsection .",
+            "similarly when studying systems with we use and trace out all qubits except the control and target of the cz gate. for instance in the case shown in <Reference> in the main text we have p ij p ijkl for the relevant probabilities and ."
+        ],
+        "start_end": [
+            [
+                69763,
+                71266
+            ],
+            [
+                102218,
+                102638
+            ]
+        ],
+        "arxiv_id": "2509.08408"
+    },
+    "2509.08408_13.png": {
         "fig_number": "13",
-        "page_number": 7,
+        "page_number": 12,
         "description": [
-            "algorithms such as quantum teleportation <Reference> make use of classical branching during qubit lifetime. although circuit oriented descriptions may call such branching classical controls qwerty includes classical conditionals instead which are more general and more familiar to classical programmers . lines and of <Reference> are examples of classical conditional expressions written in qwerty. this syntax is identical to python conditional expression syntax.",
-            "algorithms such as quantum teleportation <Reference> make use of classical branching during qubit lifetime. although circuit oriented descriptions may call such branching classical controls qwerty includes classical conditionals instead which are more general and more familiar to classical programmers . lines and of <Reference> are examples of classical conditional expressions written in qwerty. this syntax is identical to python conditional expression syntax."
+            "figure <Reference> shows how adding atoms to the system at equal coupling strengths and without performing any addressing at all deteriorates the system performance and leads to a decay in the average gate fidelity. unsurprisingly adding even just a single atom for a total of reduces the fidelity to values far below any threshold necessary for practical applications underscoring the need for qubit targeting mechanisms in our setup. counterintuitively the success probability of the local gate increases as more atoms are added to the system. a larger number of atoms coupled to the cavity with equal strengths simply means that now on average there are more atomic state configurations for which an enhanced rabi splitting shifts the cavity resonance frequency further away from its bare value that the incoming photon is tuned to. this results in an on average higher chance for the incoming photon being reflected from the input cavity mirror without any phase shift and therefore the resulting success probability according to our definition eq. is increased. nevertheless despite the higher probability of registering a successful gate operation in this case the resulting fidelities are far too low to be of any use as mentioned above. for the remote gate the success probability largely remains constant as more atoms are added to the system which is likely again due to the mixing effect of the intermediate photonic hadamard gate."
         ],
         "start_end": [
             [
-                137014,
-                137619
-            ],
-            [
-                137014,
-                137619
+                68219,
+                69761
             ]
         ],
-        "arxiv_id": "2404.12603"
-    },
-    "2404.12603_17.png": {
-        "fig_number": "17",
-        "page_number": 9,
-        "description": [
-            "<Reference> shows quantum period finding implemented in qwerty. line of <Reference> defines an example classical black box function named that returns the input modulo four giving the example function a fundamental period of . the qwerty pipeline that implements the quantum portion of period finding is written on lines of <Reference>. <Reference> traces through each step in this pipeline using qwerty syntax. the pipeline begins by initializing two registers on line of <Reference>: the first an qubit register where each qubit is and the second an qubit register with all qubits initialized to as seen at the top of <Reference> the first register can be viewed as a superposition of all possible inputs to .",
-            "<Reference> shows quantum period finding implemented in qwerty. line of <Reference> defines an example classical black box function named that returns the input modulo four giving the example function a fundamental period of . the qwerty pipeline that implements the quantum portion of period finding is written on lines of <Reference>. <Reference> traces through each step in this pipeline using qwerty syntax. the pipeline begins by initializing two registers on line of <Reference>: the first an qubit register where each qubit is and the second an qubit register with all qubits initialized to as seen at the top of <Reference> the first register can be viewed as a superposition of all possible inputs to .",
-            "next line of <Reference> step of <Reference> creates a superposition of all pairs of inputs and outputs by passing the initial superposition state through an of written with the syntax by definition when an xor embedding is passed two registers in computational basis states the first register the input register is treated as the input and is passed through unchanged and the result is xored into the second register the output register . on line of <Reference> the output register is initialized to zero meaning the output is effectively copied into the output register for each of the respective possible inputs superposed in the input register.",
-            "line of <Reference> step of <Reference> proceeds by measuring the output register and throwing away the measurement result which would be an arbitrary choice of an output of collapsing the input register to a superposition of all inputs that produce the discarded output value . the resulting state is an ensemble of possible resulting superpositions for details on the operator see section ; the four possible superpositions shown after step in <Reference> are the pairs of inputs that produce and respectively.",
-            "line of <Reference> step of <Reference> proceeds by measuring the output register and throwing away the measurement result which would be an arbitrary choice of an output of collapsing the input register to a superposition of all inputs that produce the discarded output value . the resulting state is an ensemble of possible resulting superpositions for details on the operator see section ; the four possible superpositions shown after step in <Reference> are the pairs of inputs that produce and respectively.",
-            "one can interpret a superposition of computational basis vectors as a signal in the time domain whereas period finding warrants analysis in the frequency domain which period finding achieves by measuring in the fourier basis. line of <Reference> step of <Reference> the final quantum step of period finding can be understood by imagining the state beforehand a superposition of inputs that produce the same output as a signal in the time domain. in the same sense that a time signal is a weighted sum of functions with different frequencies a discrete fourier series the superposition of inputs to that produce the same output is itself a weighted superposition of fourier basis states. measurement in the fourier basis thus reveals which fourier basis states frequencies are in this superposition. because each of these frequencies measured are multiples of the fundamental frequency the fundamental frequency can be extracted classically from sampled measurements. the reciprocal of this fundamental frequency is the desired fundamental period: for example the fundamental period of the example function defined on line of <Reference>."
-        ],
-        "start_end": [
-            [
-                51183,
-                52124
-            ],
-            [
-                51183,
-                52124
-            ],
-            [
-                52126,
-                52975
-            ],
-            [
-                52977,
-                53680
-            ],
-            [
-                52977,
-                53680
-            ],
-            [
-                53682,
-                55050
-            ]
-        ],
-        "arxiv_id": "2404.12603"
+        "arxiv_id": "2509.08408"
     }
 }

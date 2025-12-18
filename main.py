@@ -36,7 +36,7 @@ for i,paper_id in enumerate(paper_list):
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.93,
+                                   threshold=0.94,
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:
@@ -72,7 +72,7 @@ for i,paper_id in enumerate(paper_list):
      print("NUMBER OF PAPERS CHECKED:",i+1)
      if len(meta_data) == 5:
           break
-# with open("output.json", "w", encoding="utf-8") as f:
-#     json.dump(meta_data, f, ensure_ascii=False, indent=4)
+with open("output.json", "w", encoding="utf-8") as f:
+    json.dump(meta_data, f, ensure_ascii=False, indent=4)
 print(len(meta_data))
 print(meta_data)
