@@ -221,9 +221,8 @@ def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_bo
     score_list = final_scores.tolist()
     
     # this list is extracted from the extract_top_keywords(positive_file, top_n=50) in utily.py
-    boost_keywords = boost_keywords = [("plot", -0.1), ("chart",-0.1), ("Schematic", 0.1),("architecture", 0.1), ("diagram", 0.1), ("Schematic diagram", 0.1), ("flowchart", -0.2),
-    ("block diagram",- 0.10)   , ("heatmap", -0.15)   , ("curve", -0.2)                 
-
+    boost_keywords = boost_keywords = [("code", -0.3),("plot", -0.1), ("chart",-0.1), ("Schematic", 0.1),("architecture", 0.1), ("diagram", 0.1), ("Schematic diagram", 0.1), ("flowchart", -0.2),
+    ("block diagram",- 0.10)   , ("heatmap", -0.15)   , ("curve", -0.2),                
         ("quantum", 0.05), ("circuit", 0.1), ("gates", 0.05), ("quantum circuit", 0.1), ("qubits", 0.05), ("consists", 0.05), ("composed", 0.05), ("circuits", 0.05), ("quantum gates", 0.1), ("quantum circuits", 0.1), ("layers", 0.05), ("operations", 0.05), ("unitary", 0.15), ("circuit composed", 0.1), ("sequence", 0.05), ("quantum circuit composed", 0.1), ("twubit", 0.05), ("label", 0.05), ("represented", 0.05), ("gate", 0.05), ("quantum circuit consists", 0.1), ("twubit gates", 0.15), ("applied", 0.05), ("circuit consists", 0.1), ("depth", 0.05), ("number", 0.05), ("brickwork", 0.05), ("consists sequence", 0.15), ("begin", 0.05), ("section", 0.05), ("implement", 0.05), ("sec", 0.05), ("represents", 0.05), ("label sec", 0.15), ("gates consisting", 0.15), ("gates applied", 0.15), ("implemented", 0.05), ("composed twubit gates", 0.15), ("consisting", 0.05), ("cutting", 0.05), ("elementary", 0.05), ("circuit consists sequence", 0.1), ("circuit qubits", 0.1), ("clifford gates", 0.15), ("applied qubits", 0.15), ("approach", 0.05), ("clifford", 0.05), ("cnot", 0.05), ("composed twubit", 0.15), ("theorem", 0.05)]
 
     boost_keywords.sort(key=lambda x: x[1], reverse=True)
@@ -422,4 +421,107 @@ def extract_top_keywords(positive_file, top_n=50):
             score = 0.15
         print(f"    (\"{term}\", {score}),")
     print("]")
+
+
+import re
+import json
+from transformers import pipeline
+import torch
+
+# --- 1. SETUP QA PIPELINE (Global Load) ---
+device = 0 if torch.cuda.is_available() else -1
+print(f"Loading QA Model on {'GPU' if device==0 else 'CPU'}...")
+qa_pipeline = pipeline(
+    "question-answering", 
+    model="deepset/roberta-base-squad2", 
+    device=device
+)
+def extract_metadata_final(description):
+    """
+    Analyzes text to find Quantum Algorithms, Gates, and Qubit counts.
+    """
+    results = {
+        "algorithm": None,
+        "gates": []
+    }
+
+    if not description or not isinstance(description, str):
+        return results
+
+    lower_desc = description.lower()
+    gate_patterns = [
+        r"\b(cnot|cx|controlled-not)\b",
+        r"\b(hadamard|h-gate|h gate)\b",
+        r"\b(toffoli|ccx|ccn)\b",
+        r"\b(pauli-x|x-gate|sigma-x)\b",
+        r"\b(pauli-z|z-gate|phase-flip)\b",
+        r"\b(rotation|r[xyz]|theta)\b",
+        r"\b(swap|cz|controlled-z)\b",
+        r"\b(measure|measurement)\b"
+    ]
+    found_gates = set()
+    for pat in gate_patterns:
+        match = re.search(pat, lower_desc)
+        if match:
+            found_gates.add(match.group(1))
+    if found_gates:
+        results["gates"] = list(found_gates)
+
+    algo_questions = [
+        "What is the name of the protocol?",
+        "What is the name of the quantum algorithm?",
+        "Which quantum ansatz is used?", 
+        "What acronym is mentioned?"
+    ]
+    best_algo = None
+    best_score = 0.0
+    for q in algo_questions:
+        pred = qa_pipeline(question=q, context=description)
+        if len(pred['answer'].split()) > 5:
+            continue
+        if pred['score'] > best_score:
+            best_score = pred['score']
+            best_algo = pred['answer']
+    if best_algo:
+        bad_words = ["gate", "qubit", "circuit", "wire", "line", "diagram"]
+        if any(w in best_algo.lower() for w in bad_words):
+            best_algo = None 
+    if best_score > 0.1 and best_algo:
+        results["algorithm"] = best_algo
+    qubit_match = re.search(r"(\d+)\s*-?\s*qubits?", lower_desc)
+    if qubit_match:
+        results["qubits"] = qubit_match.group(1)
+    else:
+        pred_q = qa_pipeline(question="How many qubits?", context=description)
+        if pred_q['score'] > 0.1 and len(pred_q['answer']) < 5:
+            if any(char.isdigit() for char in pred_q['answer']):
+                results["qubits"] = pred_q['answer']
+    return results
+
+def update_json_with_gates_algos(json_data):
+    """
+    Iterates over the input dictionary, extracts metadata from descriptions,
+    and appends 'algorithm', 'gates', and 'qubits' keys to each entry.
+    """
+    processed_count = 0
+    print(f"Starting metadata extraction for {len(json_data)} items...")
+    for image_key, inner_dict in json_data.items():
+        raw_desc = inner_dict.get("description", "")
+        
+        if isinstance(raw_desc, list):
+            full_text = " ".join(raw_desc)
+        else:
+            full_text = str(raw_desc)
+            
+        metadata = extract_metadata_final(full_text)
+        
+        inner_dict["algorithm"] = metadata["algorithm"]
+        inner_dict["gates"] = metadata["gates"] 
+        
+        processed_count += 1
+        
+        if processed_count % 10 == 0:
+            print(f"Processed {processed_count} images...")
+
+    return json_data
 

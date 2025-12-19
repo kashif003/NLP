@@ -4,7 +4,10 @@ from collections import defaultdict
 import torch
 from transformers import AutoTokenizer
 from adapters import AutoAdapterModel
-import time
+import json
+from transformers import pipeline
+import torch
+import pandas as pd
 
 # 1) download the pdf/ latex file.
 paper_list_path= "paper_list_11.txt"
@@ -15,7 +18,9 @@ tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
 model = AutoAdapterModel.from_pretrained("allenai/scibert_scivocab_uncased")
 # laoding anchor embeddings
 anchor = torch.load("Embeddings/positive_anchor.pt")
-
+csv_file= pd.DataFrame(columns=["paper_id", "No_Img"])
+csv_rows = []
+processed_ids = set()
 meta_data= defaultdict(dict)
 for i,paper_id in enumerate(paper_list):
      # always give preference to latex
@@ -36,7 +41,7 @@ for i,paper_id in enumerate(paper_list):
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.94,
+                                   threshold=0.3,
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:
@@ -69,10 +74,36 @@ for i,paper_id in enumerate(paper_list):
           print("processing latex!")
           json_file= get_meta_data(paper_id,caption_index,captions,discriptions, start_end,figure_json_file_path=f"cache/temp_Images/{paper_id}_metadata.json")
           meta_data.update(json_file)
+          
      print("NUMBER OF PAPERS CHECKED:",i+1)
-     if len(meta_data) == 5:
-          break
-with open("output.json", "w", encoding="utf-8") as f:
-    json.dump(meta_data, f, ensure_ascii=False, indent=4)
-print(len(meta_data))
-print(meta_data)
+     img_count = sum(1 if paper_id in str(key) else 0 for key in meta_data)
+     csv_rows.append({
+        "paper_id": paper_id, 
+        "No_Img": img_count
+    })
+     processed_ids.add(paper_id)
+     break
+
+# gettting gate and algorithm info from the description.
+device = 0 if torch.cuda.is_available() else -1
+qa_pipeline = pipeline(
+    "question-answering", 
+    model="deepset/roberta-base-squad2", 
+    device=device
+)
+json_data = update_json_with_gates_algos(meta_data)
+
+for paper_id in paper_list:
+    if paper_id not in processed_ids:
+        csv_rows.append({
+            "paper_id": paper_id, 
+            "No_Img": None  # This will appear as an empty cell (NaN) in the CSV
+        })
+csv_file = pd.DataFrame(csv_rows)
+csv_file.to_csv("images_per_paper.csv", index=False)
+
+print(csv_file.head())
+
+with open("output_enriched.json", "w") as outfile:
+    json.dump(json_data, outfile, indent=4)
+    print("Saved updated data to 'output_enriched.json'")
