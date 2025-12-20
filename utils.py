@@ -211,59 +211,99 @@ def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_bo
         return False, []
     if isinstance(text_list, str):
         text_list = [text_list]
+        
     centroid = anchor['centroid'].to(device)
     individual_vectors = anchor['individual_vectors'].to(device)
+    
+    # 1. Get Embeddings (Expensive step)
     embeddings = get_scibert_embedding(text_list, model, tokenizer).to(device)
+    
+    # 2. Calculate Similarity
     score_centroid = F.cosine_similarity(embeddings, centroid, dim=1)
     all_individual_scores = torch.mm(embeddings, individual_vectors.transpose(0, 1))
     score_individual_max, _ = torch.max(all_individual_scores, dim=1)
+    
     final_scores = torch.max(score_centroid, score_individual_max)
     score_list = final_scores.tolist()
     
-    # this list is extracted from the extract_top_keywords(positive_file, top_n=50) in utily.py
-    boost_keywords = boost_keywords = [("code", -0.3),("plot", -0.1), ("chart",-0.1), ("Schematic", 0.1),("architecture", 0.1), ("diagram", 0.1), ("Schematic diagram", 0.1), ("flowchart", -0.2),
-    ("block diagram",- 0.10)   , ("heatmap", -0.15)   , ("curve", -0.2),                
-        ("quantum", 0.05), ("circuit", 0.1), ("gates", 0.05), ("quantum circuit", 0.1), ("qubits", 0.05), ("consists", 0.05), ("composed", 0.05), ("circuits", 0.05), ("quantum gates", 0.1), ("quantum circuits", 0.1), ("layers", 0.05), ("operations", 0.05), ("unitary", 0.15), ("circuit composed", 0.1), ("sequence", 0.05), ("quantum circuit composed", 0.1), ("twubit", 0.05), ("label", 0.05), ("represented", 0.05), ("gate", 0.05), ("quantum circuit consists", 0.1), ("twubit gates", 0.15), ("applied", 0.05), ("circuit consists", 0.1), ("depth", 0.05), ("number", 0.05), ("brickwork", 0.05), ("consists sequence", 0.15), ("begin", 0.05), ("section", 0.05), ("implement", 0.05), ("sec", 0.05), ("represents", 0.05), ("label sec", 0.15), ("gates consisting", 0.15), ("gates applied", 0.15), ("implemented", 0.05), ("composed twubit gates", 0.15), ("consisting", 0.05), ("cutting", 0.05), ("elementary", 0.05), ("circuit consists sequence", 0.1), ("circuit qubits", 0.1), ("clifford gates", 0.15), ("applied qubits", 0.15), ("approach", 0.05), ("clifford", 0.05), ("cnot", 0.05), ("composed twubit", 0.15), ("theorem", 0.05)]
+    # --- POSITIVES (Boosting) ---
+    # These are ONLY applied to the Caption in the logic below.
+    positive_keywords = [
+        ("quantum circuit", 0.15), 
+        ("quantum gates", 0.1), 
+        ("quantum circuits", 0.1),
+        ("architecture", 0.05),
+        ("circuit diagram", 0.1),
+        ("scematic diagram", 0.1)
 
-    boost_keywords.sort(key=lambda x: x[1], reverse=True)
+    ]
+    
     final_results = []
     has_positive_match = False
+    
     for i, txt in enumerate(text_list):
         current_score = score_list[i]
+        
         if use_boost:
             lower_text = txt.lower()
-            for keyword, boost_amt in boost_keywords:
+            for keyword, boost_amt in positive_keywords:
                 if keyword in lower_text:
                     current_score += boost_amt
                     if current_score > 1.0: current_score = 1.0
-                    break # Stop after finding the highest value keyword
+                    break # Stop after first positive match to avoid over-boosting
         
         final_results.append(current_score)
         if current_score >= threshold:
             has_positive_match = True
+            
     return has_positive_match, final_results
 
 
 def get_caption_index(model, tokenizer, captions, descriptions, threshold, anchor):
     caption_index = []
+    
+    # --- NEGATIVES (Filter) ---
+    # These apply to BOTH Description and Caption.
+    hard_negatives = [
+        "code", "plot", "chart", "flowchart", 
+        "block diagram", "heatmap", "curve", 
+        "graph", "performance", "bar chart",
+        "algorithm", "pseudo-code"
+    ]
+    
     print(f"Scanning {len(captions)} images...")
+    
     for idx, (caption, disc) in enumerate(zip(captions, descriptions)):
-        caption_match, caption_score = compare_embedding(
-            caption, anchor, model, tokenizer, 
-            threshold=threshold, 
-            use_boost=True 
-        )
-        disc_match, disc_score = compare_embedding(
-            disc, anchor, model, tokenizer, 
-            threshold=threshold, 
-            use_boost=False 
-        )
-        if caption_match or disc_match:
-            caption_index.append(idx)
-        else:
-            pass
-    return caption_index
+        
+        # Ensure texts are strings
+        caption_text = caption if isinstance(caption, str) else ""
+        disc_text = disc if isinstance(disc, str) else ""
+        
+        caption_lower = caption_text.lower()
+        disc_lower = disc_text.lower()
+        
+        # --- RULE 1: Description has NEGATIVES ONLY ---
+        # If description contains a negative word, skip image.
+        if any(neg in disc_lower for neg in hard_negatives):
+            continue 
+            
+        # --- RULE 2: Caption has NEGATIVES ---
+        # If caption contains a negative word, skip image.
+        if any(neg in caption_lower for neg in hard_negatives):
+            continue
 
+        # --- RULE 3: Caption has POSITIVES (via Embedding + Boost) ---
+        # If we survived the negative checks, we measure the caption's similarity.
+        caption_match, caption_score = compare_embedding(
+            caption_text, anchor, model, tokenizer, 
+            threshold=threshold, 
+            use_boost=True  # This applies the positive_keywords list defined above
+        )
+        
+        if caption_match:
+            caption_index.append(idx)
+            
+    return caption_index
 import re
 from difflib import SequenceMatcher
 def compare_captions(c1: str, c2: str, threshold: float = 0.8):

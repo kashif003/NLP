@@ -41,7 +41,7 @@ for i,paper_id in enumerate(paper_list):
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.3,
+                                   threshold=0.92,
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:
@@ -82,7 +82,8 @@ for i,paper_id in enumerate(paper_list):
         "No_Img": img_count
     })
      processed_ids.add(paper_id)
-     break
+     if len(meta_data)==250:
+          break
 
 # gettting gate and algorithm info from the description.
 device = 0 if torch.cuda.is_available() else -1
