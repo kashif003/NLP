@@ -26,6 +26,10 @@ for i,paper_id in enumerate(paper_list):
      # always give preference to latex
      process_pdf= False
      download_paper(paper_id)
+     path_a = f"cache/latex_source/{paper_id}"
+     path_b  = f"cache/pdf_source/{paper_id}.pdf"
+     if not os.path.isdir(path_a) or not os.path.isfile(path_b):
+          continue
 # 3) getting (caption, fig no, page no) and extracting images from pdf.
      figure_data=get_figure_data(paper_id)
 # 4) gettting (caption, discription, start_end) from the pdf/latex sources.
@@ -41,7 +45,7 @@ for i,paper_id in enumerate(paper_list):
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.92,
+                                   threshold=0.94,
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:
