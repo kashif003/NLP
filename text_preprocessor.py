@@ -1,12 +1,8 @@
-# this file will preprocess the latex text only.
-
-
 import nltk
 import scipy
 import re
 from nltk.tokenize import sent_tokenize
 import unicodedata
-
 
 class Latex_preprocessor():
     def __init__(self, text:str):
@@ -288,10 +284,8 @@ class Latex_preprocessor():
         text = re.sub(r"'", '', text)
         text = re.sub(r'"', '', text).replace("!", " .").replace(" ?", " .")
         # text= re.sub(" .", ". ", text) # gives the 
-
         text = re.sub(r" {2,}", " ", text)
         text = re.sub(r'fig\.\s+', '', text, flags=re.IGNORECASE).strip()
-
         return text
 
 import nltk

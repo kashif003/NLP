@@ -1,4 +1,5 @@
 def paper_ID_extractor(path):
+    """Extracts paper IDs from a file by parsing the substring after the first colon on each line."""
     paper_list=[]
     with open(path, "r") as f:
         for line in f:
@@ -6,7 +7,6 @@ def paper_ID_extractor(path):
             if line:                     
                 paper_list.append(line.split(":", 1)[1])
     return paper_list
-
 
 import os
 import arxiv
@@ -17,6 +17,7 @@ import json
 def download_paper(paper_ID):
     """
     Downloads the paper PDF and LaTeX source from arXiv and stores them in a cache folder.
+    also checks if the paper is already dodwnloaded.
     """
     import logging
     logging.basicConfig(level=logging.INFO)
@@ -74,28 +75,24 @@ def download_paper(paper_ID):
 
 from image_extractor import *
 def get_figure_data(paper_id):
+    """Extracts figure captions, numbers, and page locations from a specific paper's PDF and metadata."""
     pdf_path = f"cache/pdf_source/{paper_id}.pdf"
     os.makedirs("cache/temp_Images", exist_ok=True)
-
     # Extract figures and descriptions
     extract_figures_from_pdf(pdf_path, "cache/temp_Images")
-
     # Load metadata
     with open(f"cache/temp_Images/{paper_id}_metadata.json", "r", encoding="utf-8") as f:
         figure_list = json.load(f)
-
     figure_data = []
     for figure in figure_list:
         caption = figure.get("caption", "")
         figure_number = figure.get("figure_number", None)
         page_number = figure.get("page_number", None)
-
-
         figure_data.append((caption, figure_number, page_number))
-
     return figure_data
 
 def seperate_caption_discription_latex(cap_disc):
+    """Separates the caption-description dictionary into three parallel lists: captions, descriptions, and start/end markers."""
     captions= []
     discriptions= []
     start_end=[]
@@ -106,6 +103,7 @@ def seperate_caption_discription_latex(cap_disc):
     return captions, discriptions, start_end
 
 def seperate_caption_discription_pdf(cap_disc):
+    """Parses the input dictionary to separate figure labels, descriptions, positions, captions, and page numbers into distinct lists."""
     captions= []
     discriptions= []
     start_end=[]
@@ -146,7 +144,7 @@ def get_caption_discription(paper_id, pdf_source=True):
 
 
 def sentenize(partition_list):
-    #Training
+    """Splits text partitions into lists of cleaned, alphanumeric words and calculates the total word count."""
     num_words_partition = 0
     sentences_partition = []
     for partition_tweet in partition_list:
@@ -169,8 +167,8 @@ def sentenize(partition_list):
 
 
 import re
-
 def clean_for_embeddings(text_input):
+    """Preprocesses text (or a list of texts) for embeddings by removing LaTeX artifacts, normalizing whitespace, and deduplicating sentences."""
     def process_text(text):
         text = text.replace('\n', ' ').replace('\t', ' ')
         text = re.sub(r'(\w+)-\s+(\w+)', r'\1\2', text)
@@ -206,27 +204,22 @@ import torch
 import torch.nn.functional as F
 
 def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_boost=True):
+    """Calculates similarity scores between text embeddings and an anchor, applying keyword boosting to determine if matches exceed a threshold."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if not text_list:
         return False, []
     if isinstance(text_list, str):
         text_list = [text_list]
-        
     centroid = anchor['centroid'].to(device)
     individual_vectors = anchor['individual_vectors'].to(device)
-    
-    # 1. Get Embeddings (Expensive step)
+    # 1. Get Embeddings 
     embeddings = get_scibert_embedding(text_list, model, tokenizer).to(device)
-    
     # 2. Calculate Similarity
     score_centroid = F.cosine_similarity(embeddings, centroid, dim=1)
     all_individual_scores = torch.mm(embeddings, individual_vectors.transpose(0, 1))
     score_individual_max, _ = torch.max(all_individual_scores, dim=1)
-    
     final_scores = torch.max(score_centroid, score_individual_max)
     score_list = final_scores.tolist()
-    
-    # --- POSITIVES (Boosting) ---
     # These are ONLY applied to the Caption in the logic below.
     positive_keywords = [
         ("quantum circuit", 0.15), 
@@ -235,15 +228,11 @@ def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_bo
         ("architecture", 0.05),
         ("circuit diagram", 0.1),
         ("scematic diagram", 0.1)
-
     ]
-    
     final_results = []
     has_positive_match = False
-    
     for i, txt in enumerate(text_list):
         current_score = score_list[i]
-        
         if use_boost:
             lower_text = txt.lower()
             for keyword, boost_amt in positive_keywords:
@@ -251,18 +240,14 @@ def compare_embedding(text_list, anchor, model, tokenizer, threshold=0.9, use_bo
                     current_score += boost_amt
                     if current_score > 1.0: current_score = 1.0
                     break # Stop after first positive match to avoid over-boosting
-        
         final_results.append(current_score)
         if current_score >= threshold:
             has_positive_match = True
-            
     return has_positive_match, final_results
 
-
 def get_caption_index(model, tokenizer, captions, descriptions, threshold, anchor):
+    """Filters images by checking captions and descriptions against negative keywords and caption embeddings against a threshold."""
     caption_index = []
-    
-    # --- NEGATIVES (Filter) ---
     # These apply to BOTH Description and Caption.
     hard_negatives = [
         "code", "plot", "chart", "flowchart", 
@@ -272,41 +257,33 @@ def get_caption_index(model, tokenizer, captions, descriptions, threshold, ancho
     ]
     
     print(f"Scanning {len(captions)} images...")
-    
     for idx, (caption, disc) in enumerate(zip(captions, descriptions)):
-        
         # Ensure texts are strings
         caption_text = caption if isinstance(caption, str) else ""
         disc_text = disc if isinstance(disc, str) else ""
         
         caption_lower = caption_text.lower()
         disc_lower = disc_text.lower()
-        
-        # --- RULE 1: Description has NEGATIVES ONLY ---
         # If description contains a negative word, skip image.
         if any(neg in disc_lower for neg in hard_negatives):
             continue 
-            
-        # --- RULE 2: Caption has NEGATIVES ---
         # If caption contains a negative word, skip image.
         if any(neg in caption_lower for neg in hard_negatives):
             continue
-
-        # --- RULE 3: Caption has POSITIVES (via Embedding + Boost) ---
         # If we survived the negative checks, we measure the caption's similarity.
         caption_match, caption_score = compare_embedding(
             caption_text, anchor, model, tokenizer, 
             threshold=threshold, 
             use_boost=True  # This applies the positive_keywords list defined above
         )
-        
         if caption_match:
             caption_index.append(idx)
-            
     return caption_index
+
 import re
 from difflib import SequenceMatcher
 def compare_captions(c1: str, c2: str, threshold: float = 0.8):
+    """Normalizes two caption strings and compares their similarity using the SequenceMatcher ratio against a threshold."""
     # normalize captions
     def _normalize(text: str) -> str:
         s = text.lower()
@@ -321,15 +298,8 @@ def compare_captions(c1: str, c2: str, threshold: float = 0.8):
     return is_similar, score
 
 def get_meta_data_from_pdf(figure_data, caption):
-    """
-    text: need to be selected according to embeddings.
-    based on the caption/disc provided  this fucntion gets:
-     1. arxiv number of pdf. done
-     2. page_number where the figure if found.
-     3. figure_number.
-    """
+    """Identifies figure and page numbers by matching a target caption against a list of figure metadata using text similarity."""
     meta_data = {"fig_number": None, "page_number": None}  # Initialize with default values
-
     for data in figure_data:
         figure_caption = data[0]
         figure_number = data[1]
@@ -351,26 +321,23 @@ def get_meta_data_from_pdf(figure_data, caption):
     return meta_data
 
 import shutil
-def get_meta_data( paper_id, caption_index, captions, discriptions, start_end, figure_json_file_path):
+def get_meta_data(paper_id, caption_index, captions, discriptions, start_end, figure_json_file_path):
+    """Aggregates metadata for selected captions, links them to descriptions, and archives the corresponding quantum circuit images."""
     with open(figure_json_file_path, "r", encoding="utf-8") as f:
         json_file = {}
         figure_list = json.load(f)
-
     # sorting the figure data properly
     figure_data = []
     meta_data = {}
     for dict in figure_list:
         figure_data.append((dict["caption"], dict["figure_number"], dict["page_number"]))
-
     for cap_idx in caption_index:
         caption = captions[cap_idx]
         meta_data = get_meta_data_from_pdf(figure_data, caption)
         if meta_data is None or meta_data["fig_number"] is None:
             print("No valid metadata found for caption. Skipping.")
             continue
-
         print(f"QUANTUM CIRCUIT FOUND at PAGE NUMBER {meta_data['page_number']} USING CAPTION. EXTRACTING THE META DATA.")
-
         # getting description and other things.
         discription = discriptions[cap_idx]
         start_and_end = start_end[cap_idx]
@@ -378,27 +345,21 @@ def get_meta_data( paper_id, caption_index, captions, discriptions, start_end, f
             meta_data.setdefault("description", []).extend(discription)
             meta_data.setdefault("start_end", []).extend(start_and_end)
         meta_data["arxiv_id"] = paper_id
-
         print("saving image:", meta_data["fig_number"])
         os.makedirs("quantum_circuit_images", exist_ok=True)
-
         src_path = os.path.join("cache/temp_Images", f"{paper_id}_{meta_data['fig_number']}.png")
         dst_path = os.path.join("quantum_circuit_images", f"{paper_id}_{meta_data['fig_number']}.png")  # fig name
-
         if not os.path.exists(src_path):
             print(f"Source file {src_path} does not exist. Skipping.")
             continue
-
         shutil.copy2(src_path, dst_path)
         json_file[f"{paper_id}_{meta_data['fig_number']}.png"] = meta_data
         print("IMAGE SAVED SUCCESSFULLY", meta_data["fig_number"])
     return json_file
 
 
-def get_scibert_embedding(text_list,model,  tokenizer):
-    """
-    Generates normalized sentence embeddings using SciBERT mean pooling.
-    """
+def get_scibert_embedding(text_list, model, tokenizer):
+    """Generates normalized embeddings for a list of texts using SciBERT mean pooling after cleaning."""
     text_list= clean_for_embeddings(text_list)
     if not text_list:
         return torch.tensor([])
@@ -411,7 +372,6 @@ def get_scibert_embedding(text_list,model,  tokenizer):
     sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     mean_embeddings = sum_embeddings / sum_mask
-
     return F.normalize(mean_embeddings, p=2, dim=1)
 
 
@@ -424,6 +384,7 @@ try:
 except LookupError:
     nltk.download('stopwords')
 def extract_top_keywords(positive_file, top_n=50):
+    """Loads a text file, extracts frequent n-grams using CountVectorizer, assigns boosting scores based on keywords, and prints the results."""
     # 1. Load Data
     try:
         with open(positive_file, "r", encoding='utf-8') as f:
@@ -462,13 +423,11 @@ def extract_top_keywords(positive_file, top_n=50):
         print(f"    (\"{term}\", {score}),")
     print("]")
 
-
 import re
 import json
 from transformers import pipeline
 import torch
 
-# --- 1. SETUP QA PIPELINE (Global Load) ---
 device = 0 if torch.cuda.is_available() else -1
 print(f"Loading QA Model on {'GPU' if device==0 else 'CPU'}...")
 qa_pipeline = pipeline(
@@ -476,9 +435,23 @@ qa_pipeline = pipeline(
     model="deepset/roberta-base-squad2", 
     device=device
 )
+
 def extract_metadata_final(description):
     """
-    Analyzes text to find Quantum Algorithms, Gates, and Qubit counts.
+    Analyzes a text description to extract quantum circuit details using Regex and a QA model.
+
+    This function searches for specific quantum gates using regular expressions and utilizes 
+    a pre-loaded Question-Answering pipeline to identify the algorithm name and qubit count. 
+    It applies heuristic filtering to avoid generic terms in the algorithm name.
+
+    Args:
+        description (str): The text description of the quantum circuit or algorithm.
+
+    Returns:
+        dict: A dictionary containing:
+            - "algorithm" (str or None): The predicted name of the algorithm.
+            - "gates" (list): A list of identified quantum gates (e.g., 'cnot', 'hadamard').
+            - "qubits" (str or None): The detected number of qubits.
     """
     results = {
         "algorithm": None,
@@ -538,11 +511,9 @@ def extract_metadata_final(description):
                 results["qubits"] = pred_q['answer']
     return results
 
+
 def update_json_with_gates_algos(json_data):
-    """
-    Iterates over the input dictionary, extracts metadata from descriptions,
-    and appends 'algorithm', 'gates', and 'qubits' keys to each entry.
-    """
+    """Iterates through JSON data to extract and append quantum algorithm, gate, and qubit metadata using text descriptions."""
     processed_count = 0
     print(f"Starting metadata extraction for {len(json_data)} items...")
     for image_key, inner_dict in json_data.items():
@@ -564,4 +535,3 @@ def update_json_with_gates_algos(json_data):
             print(f"Processed {processed_count} images...")
 
     return json_data
-

@@ -12,6 +12,7 @@ import torch.nn.functional as F
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def encode_sentences(sentences, model, tokenizer, device=DEVICE):
+    """Encodes text inputs into normalized embeddings using the [CLS] token from the model's last hidden state."""
     sentences= clean_for_embeddings(sentences)
     print("*"*100)
     print(sentences)
@@ -35,11 +36,10 @@ def encode_sentences(sentences, model, tokenizer, device=DEVICE):
     return embeddings
 
 def get_anchor_embedding(sentence_list, model, tokenizer, device=DEVICE):
+    """Computes the mean normalized embedding (centroid) from a list of anchor sentences."""
     embeddings = encode_sentences(sentence_list, model, tokenizer, device)
     if embeddings is None:
         raise ValueError("Anchor sentence list is empty")
     anchor = embeddings.mean(dim=0)
     anchor = F.normalize(anchor, dim=0)
     return anchor
-
-

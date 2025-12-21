@@ -12,40 +12,44 @@ import pandas as pd
 # 1) download the pdf/ latex file.
 paper_list_path= "paper_list_11.txt"
 paper_list= paper_ID_extractor(paper_list_path)
-# 2) loading the model and tokeinzer.
 
+# 2) loading the model and tokeinzer.
 tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
 model = AutoAdapterModel.from_pretrained("allenai/scibert_scivocab_uncased")
-# laoding anchor embeddings
+# laoding anchor embeddings (if we dont have enchor embeddings then run anchor_embeddings.py)
 anchor = torch.load("Embeddings/positive_anchor.pt")
 csv_file= pd.DataFrame(columns=["paper_id", "No_Img"])
 csv_rows = []
 processed_ids = set()
 meta_data= defaultdict(dict)
+# main loop
 for i,paper_id in enumerate(paper_list):
      # always give preference to latex
      process_pdf= False
      download_paper(paper_id)
+     # small check need to remove this
      path_a = f"cache/latex_source/{paper_id}"
      path_b  = f"cache/pdf_source/{paper_id}.pdf"
      if not os.path.isdir(path_a) or not os.path.isfile(path_b):
           continue
 # 3) getting (caption, fig no, page no) and extracting images from pdf.
      figure_data=get_figure_data(paper_id)
+
 # 4) gettting (caption, discription, start_end) from the pdf/latex sources.
      if  process_pdf or  not os.path.exists(f"cache/latex_source/{paper_id}"):  
-          captions, discriptions, start_end,fig_nos,page_number= get_caption_discription(paper_id, pdf_source=process_pdf)
+          captions, discriptions, start_end,fig_nos,page_number= get_caption_discription(paper_id, pdf_source=True)
           process_pdf=True
      else:
           captions, discriptions, start_end= get_caption_discription(paper_id, pdf_source=False)
-# 5) compare caption and discriptions and gettting the index of captions. 
+
+# 5) compare caption and discriptions and gettting the index of quantum circuit captions.
      caption_index=get_caption_index(
                                    model=model,
                                    tokenizer=tokenizer,
                                    captions=captions,
                                    descriptions=discriptions,
                                    anchor=anchor,
-                                   threshold=0.94,
+                                   threshold=0.94,   # cosine similarity should be 0.94
                                    )
 # 6) making a json file and saving figure.
      if process_pdf:
@@ -89,7 +93,7 @@ for i,paper_id in enumerate(paper_list):
      if len(meta_data)==250:
           break
 
-# gettting gate and algorithm info from the description.
+# gettting gate names and algorithm info from the description.
 device = 0 if torch.cuda.is_available() else -1
 qa_pipeline = pipeline(
     "question-answering", 
@@ -97,17 +101,17 @@ qa_pipeline = pipeline(
     device=device
 )
 json_data = update_json_with_gates_algos(meta_data)
-
 for paper_id in paper_list:
     if paper_id not in processed_ids:
         csv_rows.append({
             "paper_id": paper_id, 
             "No_Img": None  # This will appear as an empty cell (NaN) in the CSV
         })
+
+# making a csv file.
 csv_file = pd.DataFrame(csv_rows)
 csv_file.to_csv("images_per_paper.csv", index=False)
 
-print(csv_file.head())
 
 with open("output_enriched.json", "w") as outfile:
     json.dump(json_data, outfile, indent=4)
