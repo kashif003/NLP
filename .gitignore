@@ -1,5 +1,4 @@
 data
-images
-**.md
-**.txt
+logs
 venv
+src/__pycache__

@@ -10,104 +10,86 @@ def paper_ID_extractor(path, n= None):
             return paper_list[:n]
         else:
             return paper_list
-        
+
 
 import os
-import arxiv
-import time
 import tarfile
-import mimetypes
-import json
-import time
+
+import arxiv
+import os
+import tarfile
+import urllib.request  # Used to handle the new download format
+import arxiv
+
 def download_paper(paper_ID):
     """
     Downloads the paper PDF and LaTeX source from arXiv and stores them in a cache folder.
-    also checks if the paper is already dodwnloaded.
+    Checks independently if each format is already downloaded.
     """
-    import logging
-    logging.basicConfig(level=logging.INFO)
     # Ensure cache directories exist
     cache_dir = "data"
     pdf_cache_dir = os.path.join(cache_dir, "pdf_source")
     latex_cache_dir = os.path.join(cache_dir, "latex_source")
     os.makedirs(pdf_cache_dir, exist_ok=True)
     os.makedirs(latex_cache_dir, exist_ok=True)
-    # If both PDF and latex cache exist, skip
-    pdf_path_cached = os.path.join(pdf_cache_dir, f"{paper_ID}.pdf")
-    latex_dir_cached = os.path.join(latex_cache_dir, paper_ID)
-    if os.path.exists(pdf_path_cached) and os.path.isdir(latex_dir_cached):
-        logging.info("Paper already exists in cache (pdf + latex), skipping download.")
+
+    # Define target paths to check presence independently
+    expected_pdf_path = os.path.join(pdf_cache_dir, f"{paper_ID}.pdf")
+    extract_dir_path = os.path.join(latex_cache_dir, paper_ID)
+
+    # If BOTH already exist, we can safely skip the API call
+    if os.path.exists(expected_pdf_path) and os.path.exists(extract_dir_path):
+        print(f"Paper {paper_ID} is already fully cached (PDF & LaTeX).")
         return
+    
+    # Initialize client and fetch metadata
     client = arxiv.Client()
     search = arxiv.Search(id_list=[paper_ID])
+
     try:
         paper = next(client.results(search))
     except StopIteration:
-        logging.error(f"Paper with ID {paper_ID} not found on arXiv.")
+        print(f"Paper {paper_ID} not found on arXiv.")
         return
+        
+    # Category filter
     if not any(cat.startswith("quant-ph") for cat in paper.categories):
-        logging.info(f"Paper {paper_ID} is not in the 'quant-ph' category. Skipping download.")
+        print(f"Paper {paper_ID} skipped (not in quant-ph).")
         return
 
-    logging.info(f"Downloading paper with ID: {paper_ID}")
-    # Always try to download PDF first
-    try:
-        pdf_path = paper.download_pdf(filename=f"{paper_ID}.pdf", dirpath=pdf_cache_dir)
-        logging.info(f"PDF downloaded successfully: {pdf_path}")
-    except Exception as e:
-        logging.error(f"Failed to download PDF for {paper_ID}: {e}")
-        return
-
-    # Then attempt to download and extract LaTeX source. If unavailable, keep the PDF only.
-    try:
-        extract_dir_path = os.path.join(latex_cache_dir, paper_ID)
-        os.makedirs(extract_dir_path, exist_ok=True)
-
-        # download_source may raise if no source is available
-        source_tar_path = None
+    # 1. Download PDF if it doesn't exist yet
+    if not os.path.exists(expected_pdf_path):
         try:
-            source_tar_path = paper.download_source(
-                filename=f"{paper_ID}.tar.gz",
-                dirpath=extract_dir_path
-            )
-        except Exception:
-            logging.warning(f"No LaTeX source available for {paper_ID}; PDF only.")
-            # remove empty extract dir if nothing downloaded
-            try:
-                if not any(os.scandir(extract_dir_path)):
-                    os.rmdir(extract_dir_path)
-            except Exception:
-                pass
-            return
+            # Using urllib.request.urlretrieve with the paper's pdf_url property
+            urllib.request.urlretrieve(paper.pdf_url, expected_pdf_path)
+            print(f"Successfully downloaded PDF for {paper_ID}")
+        except Exception as e:
+            print(f"[IMPORTANT] Unable to download the PDF for {paper_ID}:", e)
+    else:
+        print(f"PDF for {paper_ID} already exists. Skipping PDF download.")
 
-        if not source_tar_path:
-            logging.warning(f"No LaTeX source returned for {paper_ID}; PDF only.")
+    # 2. Download and Extract LaTeX Source if it doesn't exist yet
+    if not os.path.exists(extract_dir_path):
+        # Handle source_url whether it's a property or a method safely
+        source_url = paper.source_url() if callable(getattr(paper, "source_url", None)) else paper.source_url
+        
+        if not source_url:
+            print(f"No source URL available for {paper_ID}")
             return
-
-        mime_type, _ = mimetypes.guess_type(source_tar_path)
-        if mime_type not in ["application/gzip", "application/x-tar"] and not tarfile.is_tarfile(source_tar_path):
-            logging.warning(f"Downloaded source is not a valid tar archive: {source_tar_path}")
-            # keep PDF, remove any invalid file
-            try:
+            
+        try:
+            os.makedirs(extract_dir_path, exist_ok=True)
+            source_tar_path = os.path.join(extract_dir_path, f"{paper_ID}.tar.gz")
+            
+            # Using urllib.request.urlretrieve with the paper's source_url
+            urllib.request.urlretrieve(source_url, source_tar_path)
+            
+            if tarfile.is_tarfile(source_tar_path):
+                with tarfile.open(source_tar_path, "r:*") as tar:
+                    tar.extractall(path=extract_dir_path, filter='data') 
                 os.remove(source_tar_path)
-            except Exception:
-                pass
-            return
-
-        if tarfile.is_tarfile(source_tar_path):
-            with tarfile.open(source_tar_path, "r:*") as tar:
-                tar.extractall(path=extract_dir_path)
-            try:
-                os.remove(source_tar_path)
-            except Exception:
-                pass
-            logging.info(f"LaTeX source extracted successfully for {paper_ID}.")
-        else:
-            logging.warning(f"Source file is not a valid tar archive: {source_tar_path}; PDF only.")
-            try:
-                os.remove(source_tar_path)
-            except Exception:
-                pass
-            return
-    except Exception as e:
-        logging.error(f"Failed to download or extract LaTeX source for {paper_ID}: {e}")
+                print(f"Successfully extracted LaTeX source for {paper_ID}")
+        except Exception as e:
+            print(f"[IMPORTANT] Unable to download/extract LaTeX for {paper_ID}:", e)
+    else:
+        print(f"LaTeX source for {paper_ID} already exists. Skipping LaTeX download.")
