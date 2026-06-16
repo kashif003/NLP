@@ -1,7 +1,7 @@
 import os
 import re
 from bs4 import BeautifulSoup
-
+from utils import polish_latex
 class HTMLReader:
     def __init__(self, paper_ID):
         self.paper_ID = paper_ID
@@ -14,27 +14,52 @@ class HTMLReader:
         with open(self.html_path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
 
-    def findfing_all_equations(self):
+
+    def finding_all_equations(self):
         soup = BeautifulSoup(self.file_content, "html.parser")
+        equations = {}
+        current_section = None
+        section_counter = 1
+        global_counter = 1
         for span in soup.find_all("span", class_="ltx_tag_equation"):
-            eq_num = span.get_text(strip=True)  # e.g. "(139)"
             parent = span.find_parent(id=re.compile(r"E\d+"))
-            eq_id = parent.get("id") if parent else None  # e.g. "S4.E139"
-            math = parent.find("math") if parent else None
-            latex = math.get("alttext") if math else None     #TODO not getting the full equation check "2402.07100" equation S3.E31, A1.E56(A2, A5 in paper)
-            print(eq_num, eq_id, latex)
+            eq_id = parent.get("id") if parent else None
+            if eq_id:
+                prefix = re.match(r"^(.*?)\.E\d+$", eq_id).group(1)
+                if prefix != current_section:
+                    current_section = prefix
+                    section_counter = 1
+                mapped_id = f"{prefix}:E{section_counter}"
+                section_counter += 1
+            else:
+                mapped_id = None
+            if parent:
+                math_tags = parent.find_all("math")
+                latex = " ".join(m.get("alttext") for m in math_tags if m.get("alttext"))
+            else:
+                latex = None
+            equations[global_counter] = {"eq_id": mapped_id, "latex": str(latex)}
+            global_counter += 1
+        return equations
+
 
 
 
 paper_ids = [
-"2402.07100",
+"2402.03500",
 ]
 
 for paper_id in paper_ids:
     reader = HTMLReader(paper_id)
 
     content = reader.file_content
-    reader.findfing_all_equations()
+    equattions= reader.finding_all_equations()
+    for k,y in equattions.items():
+         print(k)
+         print(y["eq_id"])
+         print(y["latex"])
 
+        
+    #print(content)
 
     print("done")
