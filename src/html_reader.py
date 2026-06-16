@@ -1,14 +1,14 @@
 import os
 import re
 from bs4 import BeautifulSoup
-from pylatexenc.latexwalker import LatexWalker, LatexMacroNode, LatexCharsNode, LatexGroupNode, LatexEnvironmentNode
-
 class HTMLReader:
     def __init__(self, paper_ID):
         self.paper_ID = paper_ID
         self.html_path = f"{os.path.join("data/html_source", paper_ID)}.html"
         self.file_content = self._get_file_content()
         self.equations = self.finding_all_equations()
+        self.all_symbols = self.get_all_paragraph_symbols()
+        self.equation_symbols = self.match_symbols_in_equation()
 
 
 
@@ -56,44 +56,54 @@ class HTMLReader:
                         tag.replace_with(tag.get("alttext", ""))
                     results[m.get("id")] = p.get_text(" ", strip=True)
         return results
+    def get_all_paragraph_symbols(self):
+        soup = BeautifulSoup(self.file_content, "html.parser")
+        paragraph_symbols = {}
 
-    def get_symbols_from_latex(self, latex):
-        ignore = {'frac', 'left', 'right', 'cdot', 'times', 'sqrt', 'exp',
-                'sec', 'cos', 'sin', 'tan', 'log', 'ln', 'begin', 'end',
-                'displaystyle', 'text', 'mathbf', 'mathrm', 'infty', 'sum',
-                'int', 'lim', 'over', 'bar', 'hat', 'dot', 'tilde', 'leq',
-                'geq', 'neq', 'pm', 'mp', 'to', 'rightarrow', 'leftarrow', 'and'}
-        symbols = set()
+        for p in soup.find_all("p"):
+            for m in p.find_all("math"):
+                alt = m.get("alttext")
+                math_id = m.get("id")
+                if not alt or not math_id:
+                    continue
+                
+                # skip single plain letters like "f", "z", "a"
+                if re.match(r'^[a-zA-Z]$', alt):
+                    continue
+                
+                # skip plain numbers
+                if re.match(r'^\d+$', alt):
+                    continue
+                
+                # skip operators and punctuation
+                if re.match(r'^[=<>+\-*/,.\(\)]+$', alt):
+                    continue
 
-        # Step 1: simple symbols like G_{t} or A or \eta_{t}
-        step1 = re.findall(r'\\[a-zA-Z]+(?:_\{[^}]+\}|\^\{[^}]+\})?|[A-Za-z](?:_\{[^}]+\}|\^\{[^}]+\})?', latex)
-        for s in step1:
-            name = s.lstrip('\\').split('_')[0].split('^')[0]
-            if name not in ignore:
-                symbols.add(s)
+                paragraph_symbols[alt] = math_id
 
-        # Step 2: symbols inside {} not preceded by a command
-        step2 = re.findall(r'(?<!\\[a-zA-Z]{0,20})\{([^}]+)\}', latex)
-        for group in step2:
-            for s in re.findall(r'\\[a-zA-Z]+|[A-Za-z]', group):
-                name = s.lstrip('\\')
-                if name not in ignore:
-                    symbols.add(s)
-
-        # Step 3: remove anything that came from inside ignored commands like \frac{...}
-        for cmd in ignore:
-            pattern = re.compile(r'\\' + cmd + r'\{[^}]*\}')
-            for m in pattern.finditer(latex):
-                inner = re.findall(r'\\[a-zA-Z]+|[A-Za-z]', m.group())
-                for s in inner:
-                    symbols.discard(s)
-
-        return list(symbols)
-
+        return paragraph_symbols
+   
+    def match_symbols_in_equation(self):
+        matched = {}  # symbol → {"eq_id": ..., "unique_id": ...}
+        
+        for k, eq in self.equations.items():
+            eq_latex = eq["latex"]
+            eq_id = eq["eq_id"]
+            
+            for symbol, math_id in self.all_symbols.items():
+                if symbol in eq_latex:
+                    if symbol not in matched:
+                        matched[symbol] = []
+                    matched[symbol].append({
+                        "eq_id": eq_id,
+                        "unique_id": math_id
+                    })
+        
+        return matched
 
 
 paper_ids = [
-"2401.02303",
+"2401.13724",
 ]
 
 for paper_id in paper_ids:
@@ -101,11 +111,18 @@ for paper_id in paper_ids:
 
     content = reader.file_content
     equattions= reader.finding_all_equations()
-    symbols = reader.get_symbols_from_latex("G_{t}=\frac{8}{\Theta^{2}_{B}}\,,\ G_{r}=\frac{4\pi A_{r}}{\lambda^{2}}\ \text{and}\ L_{r}=(\frac{\lambda}{4\pi L})^{2}\,")
-    symbols_text = reader.find_symbol_in_paragraphs("\eta_{t}")
+    #symbols = reader.get_all_paragraph_symbols()
+    symbols = reader.equation_symbols
+    for k,v in symbols.items():
+        print(k)
+        print(v)
+
+    #symbols_text = reader.find_symbol_in_paragraphs("\eta_{t}")
     
-    print(symbols)
-    print(symbols_text)
+    # for k,y in symbols.items():
+    #     print(k)
+    #     print(y)
+    #     print()
 
     # for k,y in equattions.items():
     #      print(k)
