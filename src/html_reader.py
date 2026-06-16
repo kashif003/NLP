@@ -1,7 +1,6 @@
 import os
 import re
 from bs4 import BeautifulSoup
-from utils import polish_latex
 class HTMLReader:
     def __init__(self, paper_ID):
         self.paper_ID = paper_ID
@@ -18,7 +17,7 @@ class HTMLReader:
     def finding_all_equations(self):
         soup = BeautifulSoup(self.file_content, "html.parser")
         equations = {}
-        current_section = None
+        current_prefix_letter = None
         section_counter = 1
         global_counter = 1
         for span in soup.find_all("span", class_="ltx_tag_equation"):
@@ -26,9 +25,10 @@ class HTMLReader:
             eq_id = parent.get("id") if parent else None
             if eq_id:
                 prefix = re.match(r"^(.*?)\.E\d+$", eq_id).group(1)
-                if prefix != current_section:
-                    current_section = prefix
+                prefix_letter = prefix[0]
+                if current_prefix_letter and prefix_letter != current_prefix_letter:
                     section_counter = 1
+                current_prefix_letter = prefix_letter
                 mapped_id = f"{prefix}:E{section_counter}"
                 section_counter += 1
             else:
@@ -44,9 +44,8 @@ class HTMLReader:
 
 
 
-
 paper_ids = [
-"2402.03500",
+"2401.02303",
 ]
 
 for paper_id in paper_ids:
