@@ -2,115 +2,51 @@
     "\\displaystyle\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B}) \\displaystyle=\\mathsf{D}\\left(\\rho_{A}\\middle\\|\\tilde{\\rho}_{A}\\right)+\\mathsf{D}\\left(\\rho_{B}\\middle\\|\\tilde{\\rho}_{B}\\right),~\\forall~\\epsilon\\in(0,1).": [
         [
             "\\rho_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\epsilon",
-            "We show that the Stein’s exponent under a type I error probability constraint \\epsilon , denoted by \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) , is given by a single-letter formula when the state under the alternative is the product of its marginals ( \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ):"
-        ],
-        [
-            "\\epsilon\\in(0,1)",
-            "2 2 Strong converse here refers to the optimal Stein’s exponent being independent of the constraint, \\epsilon\\in(0,1) , on the type I error probability."
-        ],
-        [
-            "\\tilde{\\rho}_{A}",
-            "While [ 13 ] treats testing against independence under a positive rate communication constraint, we work in the zero-rate setting allowing arbitrary marginals \\tilde{\\rho}_{A} and \\tilde{\\rho}_{B} ."
-        ],
-        [
-            "\\tilde{\\rho}_{B}",
-            "While [ 13 ] treats testing against independence under a positive rate communication constraint, we work in the zero-rate setting allowing arbitrary marginals \\tilde{\\rho}_{A} and \\tilde{\\rho}_{B} ."
-        ],
-        [
-            "AB",
-            "The marginals of a bipartite linear operator \\omega_{AB} are defined as usual via partial trace operation, e.g., \\omega_{A}:=\\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} , where \\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} denotes the partial trace of \\omega_{AB} with respect to system B ."
-        ],
-        [
-            "\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B})",
-            "Here, we state our main results characterizing the Stein’s exponents \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B}) and \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) in terms of single-letter and multi-letter expressions, respectively."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B}",
-            "The proof of achievability is then completed by showing the single-letterization of \\theta^{\\star}_{\\mathsf{PLO}}(\\rho_{AB},\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B}) by utilizing the product structure of \\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} and the fact that regularized measured relative entropy optimized over all projective measurements asymptotically achieves the corresponding quantum relative entropy [ 58 ] ."
-        ],
-        [
-            "\\rho",
-            "To introduce it, let \\mathcal{Q}_{t,\\rho} denote the following generalized depolarizing semigroup with invariant state \\rho , i.e., for all bounded linear operators L ,"
-        ],
-        [
-            "\\rho_{A}",
-            "\\{|\\bar{x}\\rangle\\}_{\\bar{x}\\in\\bar{\\mathcal{X}}_{+}} ) is the set of orthonormal eigenvectors corresponding to positive eigenvalues in the spectral decomposition of \\rho_{A} (resp."
-        ],
-        [
-            "\\rho_{B}",
-            "\\rho_{B} )."
+            "Let \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ."
         ]
     ],
     "\\displaystyle\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) \\displaystyle:=\\lim_{n\\rightarrow\\infty}-\\frac{\\log\\bar{\\beta}_{n}(\\epsilon)}{n},": [
         [
             "\\rho_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\epsilon",
-            "We show that the Stein’s exponent under a type I error probability constraint \\epsilon , denoted by \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) , is given by a single-letter formula when the state under the alternative is the product of its marginals ( \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ):"
-        ],
-        [
-            "AB",
-            "The marginals of a bipartite linear operator \\omega_{AB} are defined as usual via partial trace operation, e.g., \\omega_{A}:=\\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} , where \\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} denotes the partial trace of \\omega_{AB} with respect to system B ."
-        ],
-        [
-            "\\rho",
-            "To introduce it, let \\mathcal{Q}_{t,\\rho} denote the following generalized depolarizing semigroup with invariant state \\rho , i.e., for all bounded linear operators L ,"
-        ],
-        [
-            "n\\rightarrow\\infty",
-            "Then, the type II error exponent achieved by this scheme approaches \\theta^{\\star}_{\\mathsf{PLO}}(\\rho_{AB},\\tilde{\\rho}_{AB}) in the limit n\\rightarrow\\infty by optimizing over all such measurements."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\tilde{\\rho}_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "where \\gamma_{n}(\\epsilon_{n},r_{n},\\tilde{\\rho}_{AB}) is as defined in ( 52c ),"
         ],
         [
             "\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB})",
-            "We show that the Stein’s exponent under a type I error probability constraint \\epsilon , denoted by \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) , is given by a single-letter formula when the state under the alternative is the product of its marginals ( \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ):"
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ]
     ],
     "\\displaystyle\\lim_{\\epsilon\\downarrow 0^{+}}\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB})=\\lim_{n\\rightarrow\\infty}\\sup_{\\mathcal{F}_{n},\\mathcal{G}_{n}}\\frac{1}{n}\\mathsf{D}\\left(\\sigma_{W_{n}V_{n}}\\middle\\|\\tilde{\\sigma}_{W_{n}V_{n}}\\right),": [
         [
             "\\rho_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\epsilon",
-            "We show that the Stein’s exponent under a type I error probability constraint \\epsilon , denoted by \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) , is given by a single-letter formula when the state under the alternative is the product of its marginals ( \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ):"
-        ],
-        [
-            "AB",
-            "The marginals of a bipartite linear operator \\omega_{AB} are defined as usual via partial trace operation, e.g., \\omega_{A}:=\\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} , where \\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} denotes the partial trace of \\omega_{AB} with respect to system B ."
-        ],
-        [
-            "\\rho",
-            "To introduce it, let \\mathcal{Q}_{t,\\rho} denote the following generalized depolarizing semigroup with invariant state \\rho , i.e., for all bounded linear operators L ,"
-        ],
-        [
-            "W_{n}",
-            "Let \\sigma_{W_{n}V_{n}} denote the state of (W_{n},V_{n}) under the null and \\tilde{\\sigma}_{W_{n}V_{n}} denote the state of the same systems under the alternative."
-        ],
-        [
-            "n\\rightarrow\\infty",
-            "Then, the type II error exponent achieved by this scheme approaches \\theta^{\\star}_{\\mathsf{PLO}}(\\rho_{AB},\\tilde{\\rho}_{AB}) in the limit n\\rightarrow\\infty by optimizing over all such measurements."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\tilde{\\rho}_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "where \\gamma_{n}(\\epsilon_{n},r_{n},\\tilde{\\rho}_{AB}) is as defined in ( 52c ),"
         ],
         [
             "\\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB})",
-            "We show that the Stein’s exponent under a type I error probability constraint \\epsilon , denoted by \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) , is given by a single-letter formula when the state under the alternative is the product of its marginals ( \\tilde{\\rho}_{AB}=\\tilde{\\rho}_{A}\\otimes\\tilde{\\rho}_{B} ):"
-        ],
-        [
-            "V_{n}",
-            "Let \\sigma_{W_{n}V_{n}} denote the state of (W_{n},V_{n}) under the null and \\tilde{\\sigma}_{W_{n}V_{n}} denote the state of the same systems under the alternative."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\sigma_{W_{n}V_{n}}",
@@ -122,101 +58,37 @@
         ],
         [
             "\\mathcal{F}_{n}",
-            "In this case, Alice’s encoder \\mathcal{F}_{n} is specified by a measurement channel \\mathcal{M}_{n}^{A^{n}\\to X_{n}}(\\cdot) with W_{n}=X_{n} such that"
-        ],
-        [
-            "\\epsilon\\downarrow 0^{+}",
-            "One may obtain a multi-letter characterization of \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) in the limit \\epsilon\\downarrow 0^{+} by an adaptation of the proof of [ 21 , Theorem 1] to the quantum setting."
-        ],
-        [
-            "\\mathcal{G}_{n}",
             "where the optimization is over all encoders \\mathcal{F}_{n} and \\mathcal{G}_{n} as specified above."
-        ],
-        [
-            "\\sigma",
-            "Hence, for such M_{1},M_{2} and any density operator \\sigma , \\operatorname{Tr}{\\left[\\sigma(I-M_{1})(I-M_{2})\\right]}\\geq 0 , i.e.,"
         ]
     ],
     "\\displaystyle\\theta^{\\star}_{\\mathsf{BSEP-ZR}}(\\rho_{AB},\\tilde{\\rho}_{AB}) \\displaystyle:=\\limsup_{n\\rightarrow\\infty}\\sup_{\\mathcal{M}_{n}\\in\\mathsf{BSEP-ZR_{n}}}\\frac{\\mathsf{D}\\left(\\mathcal{M}_{n}(\\rho_{AB}^{\\otimes n})\\middle\\|\\mathcal{M}_{n}(\\tilde{\\rho}_{AB}^{\\otimes n})\\right)}{n},": [
         [
             "\\rho_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
-        ],
-        [
-            "AB",
-            "The marginals of a bipartite linear operator \\omega_{AB} are defined as usual via partial trace operation, e.g., \\omega_{A}:=\\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} , where \\operatorname{Tr}_{B}{\\left[\\omega_{AB}\\right]} denotes the partial trace of \\omega_{AB} with respect to system B ."
-        ],
-        [
-            "\\rho",
-            "To introduce it, let \\mathcal{Q}_{t,\\rho} denote the following generalized depolarizing semigroup with invariant state \\rho , i.e., for all bounded linear operators L ,"
-        ],
-        [
-            "n\\rightarrow\\infty",
-            "Then, the type II error exponent achieved by this scheme approaches \\theta^{\\star}_{\\mathsf{PLO}}(\\rho_{AB},\\tilde{\\rho}_{AB}) in the limit n\\rightarrow\\infty by optimizing over all such measurements."
+            "Of particular interest is the scenario where at least one of the parties communicates classically at zero-rate to Charlie, in which case we denote \\theta(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) by \\theta_{\\mathsf{C}}(\\epsilon,\\rho_{AB},\\tilde{\\rho}_{AB}) ."
         ],
         [
             "\\tilde{\\rho}_{AB}",
-            "copies of the true state, \\rho_{AB} under the null or \\tilde{\\rho}_{AB} under the alternative, as desired and can perform local quantum operations (e.g., local measurements) on its own subsystem."
+            "where \\gamma_{n}(\\epsilon_{n},r_{n},\\tilde{\\rho}_{AB}) is as defined in ( 52c ),"
         ],
         [
             "\\mathcal{M}_{n}",
             "where \\mathcal{M}_{n}^{{\\dagger}} is the adjoint map of \\mathcal{M}_{n} ."
-        ],
-        [
-            "\\mathsf{BSEP-ZR_{n}}",
-            "where \\mathsf{BSEP-ZR_{n}} is the set of measurement channels induced by binary outcome separable POVMs of the form"
-        ],
-        [
-            "\\theta^{\\star}_{\\mathsf{BSEP-ZR}}(\\rho_{AB},\\tilde{\\rho}_{AB})",
-            "Note that \\theta^{\\star}_{\\mathsf{BSEP-ZR}}(\\rho_{AB},\\tilde{\\rho}_{AB}) does not have the inner minimization with respect to \\hat{\\rho}^{n}_{AB}\\in\\mathcal{D}_{n}(\\rho_{AB}) in contrast to the definition of \\theta^{\\star}_{\\mathsf{PLO}} ."
-        ],
-        [
-            "\\rho_{AB}^{\\otimes n}",
-            "The key idea therein relies on identifying (based on M_{n}^{A^{n}}\\otimes M_{n}^{B^{n}} ) an appropriate subspace having a sufficient overlap with the typical subspace corresponding to \\rho_{AB}^{\\otimes n} and then leveraging the classical blowing-up lemma to construct projections P_{n}^{+A^{n}}\\otimes P_{n}^{+B^{n}} so that \\operatorname{Tr}{\\left[\\rho_{AB}^{\\otimes n}\\big(P_{n}^{+A^{n}}\\otimes P_{n}^{+B^{n}}\\big)\\right]} blows up to 1, while \\operatorname{Tr}{\\left[\\sigma_{AB}^{\\otimes n}\\big(P_{n}^{+A^{n}}\\otimes P_{n}^{+B^{n}}\\big)\\right]} differs negligibly (in the exponent) from \\operatorname{Tr}{\\left[\\sigma_{AB}^{\\otimes n}\\big(M_{n}^{A^{n}}\\otimes M_{n}^{B^{n}}\\big)\\right]} ."
-        ],
-        [
-            "\\mathcal{M}_{n}(\\tilde{\\rho}_{AB}^{\\otimes n})",
-            "Also, the ratio of eigenvalues of \\mathcal{M}_{n}\\big(\\hat{\\rho}^{\\star n}_{AB}(\\mathcal{M}_{n})\\big) and \\mathcal{M}_{n}(\\tilde{\\rho}_{AB}^{\\otimes n}) is upper bounded uniformly (over \\mathcal{M}_{n} ) by 1/\\lambda_{\\min}\\big(\\tilde{\\rho}_{AB}^{\\otimes n}\\big) , where \\lambda_{\\min}\\big(\\tilde{\\rho}_{AB}^{\\otimes n}\\big)=\\min_{x,y}\\operatorname{Tr}{\\left[(P_{x}^{A^{n}}\\otimes P_{y}^{B^{n}})\\tilde{\\rho}_{AB}^{\\otimes n}\\right]} with the minimum taken over the set of all rank-one orthogonal projectors of the form P_{x}^{A^{n}}\\otimes P_{y}^{B^{n}} within the support of \\rho_{A}^{\\otimes n}\\otimes\\rho_{B}^{\\otimes n} ."
         ]
     ],
     "\\displaystyle\\lim_{n\\rightarrow\\infty}\\frac{1}{n}\\log|W_{n}|=0,": [
         [
             "W_{n}",
-            "Let \\sigma_{W_{n}V_{n}} denote the state of (W_{n},V_{n}) under the null and \\tilde{\\sigma}_{W_{n}V_{n}} denote the state of the same systems under the alternative."
+            "where |W_{n}| denotes the dimension of system W_{n} ."
         ],
         [
             "|W_{n}|",
             "where |W_{n}| denotes the dimension of system W_{n} ."
-        ],
-        [
-            "n\\rightarrow\\infty",
-            "Then, the type II error exponent achieved by this scheme approaches \\theta^{\\star}_{\\mathsf{PLO}}(\\rho_{AB},\\tilde{\\rho}_{AB}) in the limit n\\rightarrow\\infty by optimizing over all such measurements."
         ]
     ],
     "\\displaystyle\\mathcal{M}_{n}^{A^{n}\\to X_{n}}(\\omega^{A^{n}}_{n})=\\sum_{x_{n}\\in\\mathcal{X}_{n}}\\operatorname{Tr}{\\left[M_{x_{n}}\\omega^{A^{n}}_{n}\\right]}|x_{n}\\rangle\\langle x_{n}|,": [
         [
-            "\\mathcal{X}",
-            "\\mathbbm{1}_{\\mathcal{X}} denotes the indicator of a set \\mathcal{X} and I denotes the identity operator."
-        ],
-        [
             "A^{n}",
-            "To perform this task, Alice and Bob are allowed to perform local operations on A^{n} and B^{n} and communicate with Charlie."
-        ],
-        [
-            "\\mathcal{X}_{n}",
-            "for some set \\mathcal{X}_{n} satisfying \\lim_{n\\rightarrow\\infty}\\log|\\mathcal{X}_{n}|/n=0 ."
-        ],
-        [
-            "\\mathcal{M}_{n}^{A^{n}\\to X_{n}}",
-            "By restricting to encoders \\mathcal{F}_{n}^{A^{n}\\to X_{n}}=\\mathcal{M}_{n}^{A^{n}\\to X_{n}} and \\mathcal{G}_{n}^{B^{n}\\to Y_{n}}=\\mathcal{M}_{n}^{B^{n}\\to Y_{n}} for measurement channels \\mathcal{M}_{n}^{A^{n}\\to X_{n}} and \\mathcal{M}_{n}^{B^{n}\\to Y_{n}} satisfying the zero-rate communication constraint, we obtain"
-        ],
-        [
-            "\\mathcal{M}_{n}",
-            "where \\mathcal{M}_{n}^{{\\dagger}} is the adjoint map of \\mathcal{M}_{n} ."
-        ],
-        [
-            "X_{n}",
-            "Hence, Charlie has access to X_{n},V_{n} , where X_{n} is the output of the measurement channel \\mathcal{F}_{n}^{A^{n}\\to X_{n}}=\\mathcal{M}_{n}^{A^{n}\\to X_{n}} ."
+            "\\mathsf{LO}_{n}(A^{n}:B^{n}) denotes the set of local POVM’s on the bipartite system A^{n}B^{n} ."
         ]
     ],
     "\\displaystyle\\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY}):=\\min_{\\hat{p}_{XY}:\\hat{p}_{X}=p_{X},\\hat{p}_{Y}=p_{Y}}\\mathsf{D}\\big(\\hat{p}_{XY}\\|\\tilde{p}_{XY}\\big).": [
@@ -230,35 +102,11 @@
         ],
         [
             "p_{X}",
-            "An optimal scheme (see [ 10 ] ) achieving the Stein’s exponent for this hypothesis test is as follows: Each party locally tests whether its observed sequence is typical according to the marginals under the null-hypothesis, i.e., Alice checks for p_{X} -typicality and Bob checks for p_{Y} -typicality (see, e.g., [ 16 ] , for the definition of typicality)."
-        ],
-        [
-            "p_{Y}",
-            "An optimal scheme (see [ 10 ] ) achieving the Stein’s exponent for this hypothesis test is as follows: Each party locally tests whether its observed sequence is typical according to the marginals under the null-hypothesis, i.e., Alice checks for p_{X} -typicality and Bob checks for p_{Y} -typicality (see, e.g., [ 16 ] , for the definition of typicality)."
+            "Let \\mathsf{T}_{n}(\\delta,p_{X}):=\\{x^{n}\\in\\{0,1\\}^{n}:0.5n(1-\\delta)\\leq n_{1}(x^{n})\\leq 0.5n(1+\\delta)\\} be the set of \\delta -typical sequences according to p_{X} ."
         ],
         [
             "\\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY})",
-            "In [ 11 ] , it was subsequently shown that \\theta(\\epsilon,p_{XY},\\tilde{p}_{XY})=\\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY}) for all 0<\\epsilon<1 when \\tilde{p}_{XY}>0 ."
-        ],
-        [
-            "\\mathsf{D}\\big(\\hat{p}_{XY}\\|\\tilde{p}_{XY}\\big)",
-            "Note that computing \\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY}) involves minimizing a convex function \\mathsf{D}\\big(\\hat{p}_{XY}\\|\\tilde{p}_{XY}\\big) of \\hat{p}_{XY} over the convex set \\{\\hat{p}_{XY}:\\hat{p}_{X}=p_{X},\\hat{p}_{Y}=p_{Y}\\} ."
-        ],
-        [
-            "\\hat{p}_{XY}",
-            "Note that computing \\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY}) involves minimizing a convex function \\mathsf{D}\\big(\\hat{p}_{XY}\\|\\tilde{p}_{XY}\\big) of \\hat{p}_{XY} over the convex set \\{\\hat{p}_{XY}:\\hat{p}_{X}=p_{X},\\hat{p}_{Y}=p_{Y}\\} ."
-        ],
-        [
-            "(p_{XY},\\tilde{p}_{XY})",
-            "We next apply the optimal classical testing scheme leading to ( 7 ), with (p_{XY},\\tilde{p}_{XY}) replaced by (p_{XY}^{(n)},\\tilde{p}_{XY}^{(n)}) ."
-        ],
-        [
-            "\\hat{p}_{X}=p_{X}",
-            "Then, for any \\hat{p}_{XY} such that \\hat{p}_{X}=p_{X} and \\hat{p}_{Y}=p_{Y} , there exists a state \\hat{\\rho}_{AB} such that \\hat{p}_{XY}(x,y)=\\operatorname{Tr}{\\left[(P_{x}^{A}\\otimes P_{y}^{B})\\hat{\\rho}_{AB}\\right]} , \\hat{\\rho}_{A}=\\rho_{A} , and \\hat{\\rho}_{B}=\\rho_{B} ."
-        ],
-        [
-            "\\hat{p}_{Y}=p_{Y}",
-            "Then, for any \\hat{p}_{XY} such that \\hat{p}_{X}=p_{X} and \\hat{p}_{Y}=p_{Y} , there exists a state \\hat{\\rho}_{AB} such that \\hat{p}_{XY}(x,y)=\\operatorname{Tr}{\\left[(P_{x}^{A}\\otimes P_{y}^{B})\\hat{\\rho}_{AB}\\right]} , \\hat{\\rho}_{A}=\\rho_{A} , and \\hat{\\rho}_{B}=\\rho_{B} ."
+            "In particular, the number of variables do not grow with n , i.e., \\theta_{\\mathsf{ZRC}}^{\\star}(p_{XY},\\tilde{p}_{XY}) is a single-letter expression, which can be computed efficiently."
         ]
     ]
 }

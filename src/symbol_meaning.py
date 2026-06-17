@@ -1,12 +1,19 @@
 import re
 import spacy
-from transformers import pipeline
 
-# load models once at module level
+# load model once at module level
 nlp = spacy.load("en_core_web_sm")
-ner = pipeline("ner", model="dslim/distilbert-NER", aggregation_strategy="simple")
 
-DEFINING_VERBS = {"is", "are", "denotes", "denote", "represents", "represent", "refers", "stands"}
+# spaCy lemmas for defining verbs
+DEFINING_VERBS = {"be", "denote", "represent", "refer", "stand", "call", "term", "define"}
+
+_STOP_WORDS = {
+    "the", "a", "an", "is", "are", "of", "in", "for", "to", "and", "or",
+    "not", "with", "on", "at", "by", "from", "as", "where", "which", "that",
+    "this", "these", "those", "it", "its", "all", "such", "more", "then",
+    "when", "above", "below", "following", "given", "using", "shown", "thus",
+    "hence", "therefore", "here", "there", "our", "we", "be", "been", "being",
+}
 
 
 def clean_sentence(sentence: str, symbol: str) -> str:
@@ -27,23 +34,20 @@ def clean_sentence(sentence: str, symbol: str) -> str:
         Cleaned sentence with SYM placeholder and math tokens removed.
     """
     cleaned = sentence.replace(symbol, "SYM")
-    tokens = cleaned.split()
+    doc = nlp(cleaned)
     kept = []
-    for token in tokens:
-        if token == "SYM":
-            kept.append(token)
-        # drop math tokens
-        elif re.search(r'[\\{}_^]', token):
+    for token in doc:
+        text = token.text
+        if text == "SYM":
+            kept.append(text)
+        elif re.search(r'[\\{}_^]', text):
             continue
-        # drop tokens with no alphabetic characters
-        elif not re.search(r'[a-zA-Z]', token):
+        elif not re.search(r'[a-zA-Z]', text):
+            continue
+        elif token.is_oov and not token.is_alpha:
             continue
         else:
-            doc = nlp(token)
-            if all(t.is_oov and not t.is_alpha for t in doc):
-                continue
-            kept.append(token)
-
+            kept.append(text)
     return " ".join(kept)
 
 
@@ -248,10 +252,54 @@ def _score_noun_phrases(noun_phrases: list, sym_idx: int, tokens: list) -> str:
     return ""
 
 
+def _is_garbage_meaning(meaning: str) -> bool:
+    """Return True if the extracted meaning is just stop words or too short to be useful."""
+    words = meaning.lower().split()
+    if not words:
+        return True
+    meaningful = [w for w in words if w not in _STOP_WORDS and re.search(r'[a-zA-Z]{2,}', w)]
+    return len(meaningful) == 0
+
+
+def _extract_by_dependency(cleaned: str) -> str:
+    """
+    Use spaCy dependency parse to find a defining noun phrase for SYM.
+    Handles two patterns:
+      - SYM is/denotes X  →  return X
+      - X denotes/called SYM  →  return X
+    """
+    doc = nlp(cleaned)
+    sym_token = next((t for t in doc if t.text == "SYM"), None)
+    if not sym_token:
+        return ""
+
+    # Pattern: SYM (subj) → defining verb → object/attr is the meaning
+    if sym_token.dep_ == "nsubj" and sym_token.head.lemma_ in DEFINING_VERBS:
+        for child in sym_token.head.children:
+            if child.dep_ in ("attr", "dobj"):
+                phrase = " ".join(t.text for t in child.subtree if not t.is_punct)
+                phrase = re.sub(r'^(the|a|an)\s+', '', phrase.strip(), flags=re.IGNORECASE)
+                words = phrase.split()
+                if 1 <= len(words) <= 5:
+                    return " ".join(words[:4])
+
+    # Pattern: X (subj) → defining verb → SYM (obj/attr) → return X
+    if sym_token.dep_ in ("dobj", "pobj", "attr") and sym_token.head.lemma_ in DEFINING_VERBS:
+        for child in sym_token.head.children:
+            if child.dep_ == "nsubj":
+                phrase = " ".join(t.text for t in child.subtree if not t.is_punct)
+                phrase = re.sub(r'^(the|a|an)\s+', '', phrase.strip(), flags=re.IGNORECASE)
+                words = phrase.split()
+                if 1 <= len(words) <= 5:
+                    return " ".join(words[:4])
+
+    return ""
+
+
 def extract_symbol_meaning(symbol: str, context: str) -> str:
     """
     Extract a short meaning for a math symbol from its context sentence.
-    Pipeline: strict regex → NER → spaCy noun chunks with scoring.
+    Pipeline: strict regex → dependency parse → spaCy noun chunks with scoring.
 
     Parameters
     ----------
@@ -274,39 +322,19 @@ def extract_symbol_meaning(symbol: str, context: str) -> str:
 
     # Step 1: strict regex patterns — most reliable when they match
     meaning = _apply_regex_patterns(cleaned, sym_idx, tokens)
-    if meaning:
+    if meaning and not _is_garbage_meaning(meaning):
         return meaning
 
-    # Step 2: NER — find named entity closest to SYM
-    try:
-        ner_results = ner(cleaned)
-        candidates = []
-        for entity in ner_results:
-            entity_text = entity["word"].replace("##", "")
-            if "SYM" in entity_text:
-                continue
-            entity_tokens = entity_text.split()
-            for i, t in enumerate(tokens):
-                if t == entity_tokens[0]:
-                    candidates.append({
-                        "text": entity_text,
-                        "start": i,
-                        "end": i + len(entity_tokens)
-                    })
-                    break
-        if candidates:
-            best = min(candidates, key=lambda c: abs(c["start"] - sym_idx))
-            meaning = re.sub(r'^(the|a|an)\s+', '', best["text"].strip(), flags=re.IGNORECASE)
-            if meaning:
-                return meaning
-    except Exception:
-        pass
+    # Step 2: dependency parse — find defining relation to SYM
+    meaning = _extract_by_dependency(cleaned)
+    if meaning and not _is_garbage_meaning(meaning):
+        return meaning
 
     # Step 3: spaCy noun chunks scored by proximity
     noun_phrases, spacy_tokens = get_noun_phrases(cleaned)
     if noun_phrases:
         meaning = _score_noun_phrases(noun_phrases, sym_idx, spacy_tokens)
-        if meaning:
+        if meaning and not _is_garbage_meaning(meaning):
             return meaning
 
     return ""
