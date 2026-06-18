@@ -271,6 +271,25 @@ class PaperTextExtractor:
                 return " " + self._get_eqn_placeholder(real_id) + " "
             return " [TEMPEQN] "
 
+        # equation mention — an in-text reference link, where the href is
+        # either a bare fragment (#S2.E1) or a full URL ending in the
+        # fragment (https://arxiv.org/.../2506.19219v3#S5.E52). this applies
+        # to ANY referenced equation, not only the tracked ones: the
+        # displayed number lives in the link text, so we read it from there
+        # (preferring the tracked number when available). non-equation links
+        # fall through and are processed normally.
+        if node.name == "a":
+            href = node.get("href", "")
+            if "#" in href:
+                ref_id = href.rsplit("#", 1)[1]
+                if re.search(r'\.E\d+', ref_id):
+                    if ref_id in self.equations:
+                        number = self.equations[ref_id]["number"]
+                    else:
+                        number = re.sub(r'[()]', '', node.get_text()).strip()
+                    if number:
+                        return " [#EQ(" + number + ")] "
+
         # inline math tag — replace with symbol placeholder
         if node.name == "math":
             # skip if inside equation block
@@ -313,25 +332,94 @@ class PaperTextExtractor:
         # collapse whitespace
         clean_text = re.sub(r'\n{3,}', '\n\n', raw_text)
         clean_text = re.sub(r' {2,}', ' ', clean_text)
+
+        # tidy equation mentions: the "(", ")" and "Eq."/"Equation" wrapper
+        # sit outside the link, so a raw reference renders as
+        # "Eq. ( [#EQ(1)] )". collapse it to just "[#EQ(1)]" — the
+        # placeholder already reads as "equation 1".
+        mention = r'\[#EQ\([^)]*\)\]'
+        # case 1: optional Eq word + parentheses around the mention
+        clean_text = re.sub(
+            r'(?:(?:Eqs?|Eqns?|Equations?)\.?\s*)?\(\s*(' + mention + r')\s*\)',
+            r'\1',
+            clean_text,
+        )
+        # case 2: leftover Eq word sitting directly before the mention
+        clean_text = re.sub(
+            r'(?:Eqs?|Eqns?|Equations?)\.?\s*(' + mention + r')',
+            r'\1',
+            clean_text,
+        )
+
         clean_text = clean_text.strip()
 
         return clean_text, self.eqn_mapping, self.sym_mapping
 
 
+def map_symbols_to_equations(eqn_mapping, sym_mapping):
+    """
+    Find which inline symbols appear in each equation, using boundary-aware
+    matching so a single-letter symbol (e.g. 'e') does not falsely match
+    inside a longer token (e.g. '\\eta', '\\int', or '\\mathrm{ATI}').
+
+    Parameters
+    ----------
+    eqn_mapping : dict
+        "[EQ(1)]" -> {"latex": str, "real_id": str}
+    sym_mapping : dict
+        "[SYM1]" -> latex string
+
+    Returns
+    -------
+    dict
+        "[EQ(1)]" -> list of symbol placeholders found in that equation.
+    """
+    # precompile a matcher per symbol
+    matchers = {}
+    for sym_ph, sym_latex in sym_mapping.items():
+        if not sym_latex:
+            continue
+        if len(sym_latex) == 1 and sym_latex.isalpha():
+            # single letter: must stand alone — not part of a longer
+            # identifier or a \command (so 'e' won't match '\eta',
+            # 'T'/'I' won't match '\mathrm{ATI}', 'i' won't match '\int')
+            pattern = r"(?<![A-Za-z\\])" + re.escape(sym_latex) + r"(?![A-Za-z])"
+        else:
+            pattern = re.escape(sym_latex)
+        matchers[sym_ph] = re.compile(pattern)
+
+    result = {}
+    for eq_ph, eq_data in eqn_mapping.items():
+        eq_latex = eq_data.get("latex", "")
+        result[eq_ph] = [
+            sym_ph for sym_ph, rx in matchers.items() if rx.search(eq_latex)
+        ]
+    return result
+
 if __name__ == "__main__":
-    paper_id = "2510.12545"
+    paper_id = "2506.19219"
     extractor = PaperTextExtractor(paper_id)
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
-
-    print("=== EQUATION MAPPING ===")
-    for placeholder, data in eqn_mapping.items():
-        print(f"{placeholder} → real_id: {data['real_id']}")
-        print(f"          latex:   {data['latex']}...")
-        print()
-
-    print("=== SYMBOL MAPPING (first 10) ===")
-    for placeholder, latex in list(sym_mapping.items()):
-        print(f"{placeholder} → {latex}")
-
-    print("\n=== CLEAN TEXT SAMPLE (first 2000 chars) ===")
+    print(eqn_mapping)
     print(clean_text)
+
+    eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
+    for eq_ph, syms in eq_to_syms.items():
+        print(eq_ph, "->", syms)
+        for s in syms:
+            print("   ", s, ":", sym_mapping[s])
+
+
+
+    # print("=== EQUATION MAPPING ===")
+    # for placeholder, data in eqn_mapping.items():
+    #     print(f"{placeholder} → real_id: {data['real_id']}")
+    #     print(f"          latex:   {data['latex']}...")
+    #     print()
+
+    # print("=== SYMBOL MAPPING (first 10) ===")
+    # for placeholder, latex in list(sym_mapping.items()):
+    #     print(f"{placeholder} → {latex}")
+
+    # print("\n=== CLEAN TEXT SAMPLE (first 2000 chars) ===")
+    # print(clean_text)
