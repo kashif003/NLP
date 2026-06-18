@@ -4,7 +4,7 @@ import re
 def _replace_if_math(m: re.Match) -> str:
     """Replace match with [EQ] only if it contains a latex command or subscript/superscript."""
     if re.search(r'\\[a-zA-Z]+|[a-zA-Z0-9][_\^]\{', m.group(0)):
-        return '[EQ]'
+        return ''     # here was sym
     return m.group(0)
 
 def clean_text(text: str) -> str:

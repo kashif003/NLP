@@ -1,16 +1,23 @@
 import os
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 SKIP_PATTERNS = [
     re.compile(r'^[a-zA-Z]$'),
     re.compile(r'^\d+$'),
     re.compile(r'^[=<>+\-*/,.\(\)]+$'),
-    re.compile(r'^[A-Z]{1,4}$'),   # bare subscript labels like AB, XY
+    re.compile(r'^[A-Z]{1,4}$'),
 ]
 
 MIN_DEFINITION_SCORE = 2
 MAX_EQUATIONS = 7
+
+EQUATION_BLOCK_CLASSES = {
+    "ltx_equationgroup",
+    "ltx_equation",
+    "ltx_eqn_row",
+    "ltx_eqn_table",
+}
 
 
 class HTMLReader:
@@ -29,9 +36,36 @@ class HTMLReader:
         with open(self.html_path, "r", encoding="utf-8", errors="ignore") as f:
             return BeautifulSoup(f.read(), "html.parser")
 
+    def _get_block_root(self, tag):
+        """
+        Walk up from tag to the root of a multi-line equation block.
+        Stops when the parent is no longer an equation-type container.
+
+        Parameters
+        ----------
+        tag : bs4.element.Tag
+            Starting tag.
+
+        Returns
+        -------
+        bs4.element.Tag
+            Topmost equation block container, or tag itself if not
+            part of a multi-line block.
+        """
+        current = tag
+        while current.parent:
+            parent_classes = set(current.parent.get("class") or [])
+            if parent_classes & EQUATION_BLOCK_CLASSES:
+                current = current.parent
+            else:
+                break
+        return current
+
     def _find_equations(self):
         """
-        Extract enumerated equations from the HTML.
+        Extract enumerated equations from the HTML. For multi-line equation
+        blocks, walks up to the block root and collects latex from all lines
+        not just the tagged line. Skips duplicate blocks already processed.
 
         Returns
         -------
@@ -42,6 +76,7 @@ class HTMLReader:
         current_prefix = None
         section_counter = 1
         global_counter = 1
+        seen_roots = set()
 
         for span in self.soup.find_all("span", class_="ltx_tag_equation"):
             if len(equations) == MAX_EQUATIONS:
@@ -62,11 +97,21 @@ class HTMLReader:
                 mapped_id = f"{prefix}.E{section_counter}"
                 section_counter += 1
 
-            latex = None
-            if parent:
-                latex = " ".join(
-                    m.get("alttext") for m in parent.find_all("math") if m.get("alttext")
-                )
+            # walk up to block root to collect ALL lines of multi-line equation
+            block_root = self._get_block_root(parent) if parent else parent
+            root_id = id(block_root)
+
+            # skip if this block was already processed
+            if root_id in seen_roots:
+                continue
+            seen_roots.add(root_id)
+
+            # collect latex from ALL math tags in the entire block
+            latex = " ".join(
+                m.get("alttext")
+                for m in block_root.find_all("math")
+                if m.get("alttext")
+            )
 
             equations[global_counter] = {
                 "eq_id": mapped_id,
@@ -134,7 +179,6 @@ class HTMLReader:
         for eq in self.equations.values():
             eq_latex, eq_id = eq["latex"], eq["eq_id"]
             for symbol, math_ids in self.all_symbols.items():
-                # negative lookahead to avoid matching \rho inside \rho_{AB}
                 pattern = re.escape(symbol) + r'(?![_\^{}\[\]a-zA-Z])'
                 if re.search(pattern, eq_latex):
                     if symbol not in matched:
@@ -161,37 +205,6 @@ class HTMLReader:
         for tag in container_copy.find_all("math"):
             tag.replace_with(tag.get("alttext", ""))
         return container_copy.get_text(" ", strip=True)
-
-    def _extract_text_with_mention(self, paragraph, real_id):
-        """
-        Extract text from paragraph replacing the equation anchor with [MENTION].
-
-        Parameters
-        ----------
-        paragraph : bs4.element.Tag
-            Paragraph HTML tag.
-        real_id : str
-            Real HTML id of the equation to replace with [MENTION].
-
-        Returns
-        -------
-        str
-            Plain text with equation reference replaced by [MENTION]
-            and all math tags replaced by their alttext.
-        """
-        para_copy = BeautifulSoup(str(paragraph), "html.parser")
-
-        # replace equation anchor with [MENTION]
-        for a in para_copy.find_all("a", href=lambda h: h and (
-            h == f"#{real_id}" or h.endswith(f"#{real_id}")
-        )):
-            a.replace_with("[MENTION]")
-
-        # replace math tags with alttext
-        for tag in para_copy.find_all("math"):
-            tag.replace_with(tag.get("alttext", ""))
-
-        return para_copy.get_text(" ", strip=True)
 
     def _find_container(self, tag):
         """
@@ -387,7 +400,7 @@ class HTMLReader:
 
     def get_data(self):
         """
-        Build final result: equation latex → list of (symbol, context) tuples.
+        Build final result: equation latex to list of (symbol, context) tuples.
 
         Returns
         -------
@@ -428,16 +441,13 @@ class HTMLReader:
         """
         s = sentence.strip()
 
-        # too short to be meaningful
         if len(s.split()) < 5:
             return True
 
-        # too few english words — mostly math
         english_words = re.findall(r'\b[a-zA-Z]{2,}\b', s)
         if len(english_words) < 3:
             return True
 
-        # common trivial/transitional patterns
         trivial_patterns = [
             r'^then[,\s]',
             r'^where[,\s]',
@@ -450,7 +460,7 @@ class HTMLReader:
             r'^substituting',
             r'^combining',
             r'^plugging',
-            r'^\u220e',   # tombstone ∎
+            r'^\u220e',
             r'^proof',
         ]
         for pattern in trivial_patterns:
@@ -459,97 +469,76 @@ class HTMLReader:
 
         return False
 
-    def _get_referenced_sentences(self, real_id):
+    def _is_real_text(self, sentence):
         """
-        Find all sentences that reference an equation by its HTML id.
-        For each unique reference location collect:
-        - sentence before the reference  (key 1)
-        - sentence containing reference  (key 2) with [MENTION] replacing the ref
-        - sentence after the reference   (key 3)
-        Duplicate paragraph locations are skipped.
-
-        Handles both relative hrefs (#S1.E1) and absolute URLs
-        (https://arxiv.org/html/...#S1.E1).
+        Check if sentence contains enough English words to be real text
+        and not just latex or math content.
 
         Parameters
         ----------
-        real_id : str
-            Real HTML id of the equation (e.g. 'S1.E1')
+        sentence : str
+            Sentence to check.
 
         Returns
         -------
-        list of dict
-            Each dict is {1: sent_before, 2: sent_with_mention, 3: sent_after}
-            Empty list if equation is not referenced.
+        bool
+            True if sentence contains at least 3 real English words.
         """
-        all_groups = []
-        seen_para_indices = set()
+        english_words = re.findall(r'\b[a-zA-Z]{3,}\b', sentence)
+        return len(english_words) >= 3
 
-        def extract_sentences(paragraph):
-            """Split paragraph plain text into sentences."""
-            if not paragraph:
-                return []
-            text = self._extract_text_from_container(paragraph)
-            return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    def _collect_text_before_eq(self, parent, eq_tag):
+        """
+        Walk all siblings before eq_tag inside parent, extracting plain text
+        from every node type: NavigableString, math tags replaced by alttext,
+        anchor tags, spans, and any other inline elements. Returns empty string
+        if result contains no real English words indicating pure math content.
 
-        anchors = self.soup.find_all(
-            "a",
-            href=lambda h: h and (
-                h == f"#{real_id}" or
-                h.endswith(f"#{real_id}")
-            )
-        )
+        Parameters
+        ----------
+        parent : bs4.element.Tag
+            Parent element containing eq_tag.
+        eq_tag : bs4.element.Tag
+            The equation tag to stop at.
 
-        if not anchors:
-            return []
+        Returns
+        -------
+        str
+            Concatenated plain text of all content before eq_tag,
+            or empty string if result is pure latex/math.
+        """
+        text_parts = []
+        for sibling in parent.children:
+            if sibling == eq_tag:
+                break
 
-        for anchor in anchors:
-            para = None
-            for parent in anchor.parents:
-                if parent.name == "p":
-                    para = parent
-                    break
-            if not para:
-                continue
+            if isinstance(sibling, NavigableString):
+                text_parts.append(str(sibling))
+            elif sibling.name == "math":
+                text_parts.append(sibling.get("alttext", ""))
+            else:
+                inner = BeautifulSoup(str(sibling), "html.parser")
+                for m in inner.find_all("math"):
+                    m.replace_with(m.get("alttext", ""))
+                text_parts.append(inner.get_text(" ", strip=False))
 
-            idx = self._para_index.get(para, -1)
-            if idx == -1:
-                continue
+        result = re.sub(r'\s+', ' ', " ".join(text_parts)).strip()
 
-            if idx in seen_para_indices:
-                continue
-            seen_para_indices.add(idx)
+        # reject if no real English words — pure latex/math block
+        if not self._is_real_text(result):
+            return ""
 
-            group = {}
-
-            # 1 — last sentence of previous paragraph
-            if idx > 0:
-                prev_sents = extract_sentences(self._all_paragraphs[idx - 1])
-                if prev_sents:
-                    group[1] = prev_sents[-1]
-
-            # 2 — current paragraph with equation reference replaced by [MENTION]
-            group[2] = self._extract_text_with_mention(para, real_id)
-
-            # 3 — first sentence of next paragraph
-            if idx + 1 < len(self._all_paragraphs):
-                next_sents = extract_sentences(self._all_paragraphs[idx + 1])
-                if next_sents:
-                    group[3] = next_sents[0]
-
-            if group:
-                all_groups.append(group)
-
-        return all_groups
+        return result
 
     def _get_physical_location_sentences(self, real_id):
         """
-        Collect sentences around the physical location of the equation in HTML.
-        Used when equation is not referenced anywhere.
-        Gets last 2 non-trivial sentences from paragraph before and first 2
-        non-trivial sentences from paragraph after the equation tag.
-        Falls back to unfiltered sentences if no meaningful ones are found.
-        [MENTION] is placed after the before-sentences to mark equation location.
+        Collect the last meaningful sentence immediately before the equation
+        block in the HTML. Walks up to the root of the full multi-line equation
+        block first, then checks text before the block in the same parent.
+        If the text before the block is a sentence fragment (does not start
+        with a capital letter), prepends the last sentence of the previous
+        paragraph to complete it. Falls back to walking previous paragraphs
+        if no text found in same parent. Appends [EQUATION] to mark position.
 
         Parameters
         ----------
@@ -559,78 +548,111 @@ class HTMLReader:
         Returns
         -------
         list of dict
-            Single group with numbered sentences and [MENTION] after before-sentences.
+            Single group with {1: last_sentence_before_equation + ' [EQUATION]'}
+            Empty list if no real text found before equation.
         """
-        def extract_sentences(paragraph):
-            """Split paragraph text into sentences."""
-            if not paragraph:
-                return []
-            text = self._extract_text_from_container(paragraph)
+        def extract_sentences(text):
+            """Split text into sentences."""
             return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
 
-        def get_best_sentences(sents, n, from_end=False):
+        def best_sentence(sents):
             """
-            Get up to n meaningful sentences, falling back to unfiltered if needed.
+            Return last meaningful real-text sentence from list,
+            falling back to last real-text sentence if all are trivial.
 
             Parameters
             ----------
             sents : list of str
-                All sentences from paragraph.
-            n : int
-                Number of sentences to return.
-            from_end : bool
-                If True take from end, else from start.
+                Sentences to filter.
 
             Returns
             -------
-            list of str
-                Up to n sentences.
+            str or None
+                Best sentence or None if no real text found.
             """
-            meaningful = [s for s in sents if not self._is_trivial_sentence(s)]
-            # use meaningful if available, else fall back to all sentences
-            pool = meaningful if meaningful else sents
-            return pool[-n:] if from_end else pool[:n]
+            meaningful = [s for s in sents
+                        if not self._is_trivial_sentence(s) and self._is_real_text(s)]
+            if meaningful:
+                return meaningful[-1]
+            fallback = [s for s in sents if self._is_real_text(s)]
+            return fallback[-1] if fallback else None
+
+        def is_fragment(text):
+            """
+            Check if text is a sentence fragment by testing whether it
+            starts with a lowercase letter, meaning the sentence began
+            in the previous paragraph.
+
+            Parameters
+            ----------
+            text : str
+                Text to check.
+
+            Returns
+            -------
+            bool
+                True if text appears to be a fragment.
+            """
+            stripped = text.strip()
+            return bool(stripped) and stripped[0].islower()
 
         eq_tag = self.soup.find(id=real_id)
         if not eq_tag:
             return []
 
+        # walk up to root of full multi-line equation block
+        block_root = self._get_block_root(eq_tag)
+
         group = {}
-        key = 1
 
-        # last 2 sentences from paragraph before equation
-        prev_para = eq_tag.find_previous("p")
-        if prev_para:
-            prev_sents = extract_sentences(prev_para)
-            for s in get_best_sentences(prev_sents, 2, from_end=True):
-                group[key] = s
-                key += 1
+        # --- text before block root in same parent ---
+        parent = block_root.parent
+        if parent:
+            before_text = self._collect_text_before_eq(parent, block_root)
+            before_text = re.sub(r'\s+', ' ', before_text).strip()
 
-        # [MENTION] marks where the equation is
-        group["[MENTION]"] = "[MENTION]"
+            if before_text:
+                # if fragment, prepend last sentence of previous paragraph
+                if is_fragment(before_text):
+                    prev_para = block_root.find_previous("p")
+                    if prev_para:
+                        prev_text = self._extract_text_from_container(prev_para)
+                        prev_sents = extract_sentences(prev_text)
+                        real_prev = [s for s in prev_sents if self._is_real_text(s)]
+                        if real_prev:
+                            before_text = real_prev[-1] + " " + before_text
 
-        # first 2 sentences from paragraph after equation
-        next_para = eq_tag.find_next("p")
-        if next_para:
-            next_sents = extract_sentences(next_para)
-            for s in get_best_sentences(next_sents, 2, from_end=False):
-                group[key] = s
-                key += 1
+                sents = extract_sentences(before_text)
+                picked = best_sentence(sents)
+                if picked:
+                    group[1] = picked + " [EQUATION]"
+
+        # --- fallback: walk previous paragraphs until real text found ---
+        if not group:
+            prev_para = block_root.find_previous("p")
+            while prev_para:
+                text = self._extract_text_from_container(prev_para)
+                sents = extract_sentences(text)
+                picked = best_sentence(sents)
+                if picked:
+                    group[1] = picked + " [EQUATION]"
+                    break
+                prev_para = prev_para.find_previous("p")
 
         return [group] if group else []
-
     def get_equation_contexts(self):
         """
-        Get context sentences for all equations.
-        - If equation is referenced: use referenced sentences, one group per reference
-        - If equation is not referenced: use physical location sentences with [MENTION]
+        Get context sentences for all equations using only the physical
+        location of the equation in HTML. Extracts the last meaningful
+        real-text sentence from immediately before the equation block,
+        with [EQUATION] appended to mark the equation position.
 
         Returns
         -------
         dict
             Keys are eq_id (mapped), values are dicts with:
-            - 'groups': list of dicts {1: sent, 2: sent, '[MENTION]': '[MENTION]', ...}
-            - 'referenced': bool, True if equation was referenced in text
+            - 'groups': list with single dict {1: sentence_with_equation_marker}
+            - 'referenced': always False, physical location only
         """
         result = {}
         for counter, eq in self.equations.items():
@@ -641,18 +663,14 @@ class HTMLReader:
                 result[eq_id] = {"groups": [], "referenced": False}
                 continue
 
-            ref_groups = self._get_referenced_sentences(real_id)
-            if ref_groups:
-                result[eq_id] = {"groups": ref_groups, "referenced": True}
-            else:
-                phys_groups = self._get_physical_location_sentences(real_id)
-                result[eq_id] = {"groups": phys_groups, "referenced": False}
+            phys_groups = self._get_physical_location_sentences(real_id)
+            result[eq_id] = {"groups": phys_groups, "referenced": False}
 
         return result
 
 
 if __name__ == "__main__":
-    paper_ids = ["2510.12545"]
+    paper_ids = ["2407.17199"]
 
     for paper_id in paper_ids:
         reader = HTMLReader(paper_id)
@@ -663,25 +681,10 @@ if __name__ == "__main__":
             latex = eq["latex"]
             ctx = eq_contexts.get(eq_id, {})
             groups = ctx.get("groups", [])
-            referenced = ctx.get("referenced", False)
 
             print(f"\n{'='*60}")
             print(f"EQUATION {counter}: {latex}")
-            print(f"Referenced: {referenced}")
             print(f"{'='*60}")
-            for g_idx, group in enumerate(groups, 1):
-                print(f"  [Reference {g_idx}]" if referenced else "  [Physical location]")
-
-                # print before-sentences (integer keys), then [MENTION], then after-sentences
-                int_keys = sorted([k for k in group.keys() if isinstance(k, int)])
-                before_keys = int_keys[:2]
-                after_keys = int_keys[2:]
-
-                for k in before_keys:
-                    print(f"    {k}. {group[k]}")
-
-                if "[MENTION]" in group:
-                    print(f"    [MENTION]")
-
-                for k in after_keys:
-                    print(f"    {k}. {group[k]}")
+            for group in groups:
+                for k, v in sorted(group.items(), key=lambda x: str(x[0])):
+                    print(f"    {k}. {v}")
