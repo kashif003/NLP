@@ -9,7 +9,7 @@ SKIP_PATTERNS = [
     re.compile(r'^[A-Z]{1,4}$'),
 ]
 
-MIN_DEFINITION_SCORE = 2
+MIN_DEFINITION_SCORE = -1
 MAX_EQUATIONS = 7
 
 EQUATION_BLOCK_CLASSES = {
@@ -268,6 +268,8 @@ class HTMLReader:
         """
         Score a sentence by how likely it defines the symbol.
         Higher score = more likely to be a definition sentence.
+        Includes bonus for juxtaposition pattern where symbol appears
+        immediately after a meaningful noun phrase.
 
         Parameters
         ----------
@@ -329,6 +331,18 @@ class HTMLReader:
                      r'bounded|orthogonal|equal|arbitrary|fixed)\b',
                      sym_placeholder, re.IGNORECASE):
             score -= 4
+
+        # bonus: symbol immediately after meaningful noun (definition by juxtaposition)
+        # e.g. "vector potential \mathbf{A}(t)" → clear definition pattern
+        NON_DEFINITION_WORDS = {
+            "where", "when", "thus", "hence", "then", "and", "or",
+            "but", "the", "a", "an", "if", "as", "by", "with"
+        }
+        if sym_idx > 0:
+            left_word = tokens[sym_idx - 1].lower()
+            if (re.search(r'[a-zA-Z]{3,}', left_word) and
+                    left_word not in NON_DEFINITION_WORDS):
+                score += 3
 
         return score
 
@@ -530,7 +544,7 @@ class HTMLReader:
 
         return result
 
-    def _get_physical_location_sentences(self, real_id):
+    def _get_physical_location_sentence(self, real_id):
         """
         Collect the last meaningful sentence immediately before the equation
         block in the HTML. Walks up to the root of the full multi-line equation
@@ -547,9 +561,9 @@ class HTMLReader:
 
         Returns
         -------
-        list of dict
-            Single group with {1: last_sentence_before_equation + ' [EQUATION]'}
-            Empty list if no real text found before equation.
+        str or None
+            Last sentence before equation with [EQUATION] appended,
+            or None if no real text found before equation.
         """
         def extract_sentences(text):
             """Split text into sentences."""
@@ -571,7 +585,7 @@ class HTMLReader:
                 Best sentence or None if no real text found.
             """
             meaningful = [s for s in sents
-                        if not self._is_trivial_sentence(s) and self._is_real_text(s)]
+                          if not self._is_trivial_sentence(s) and self._is_real_text(s)]
             if meaningful:
                 return meaningful[-1]
             fallback = [s for s in sents if self._is_real_text(s)]
@@ -598,12 +612,10 @@ class HTMLReader:
 
         eq_tag = self.soup.find(id=real_id)
         if not eq_tag:
-            return []
+            return None
 
         # walk up to root of full multi-line equation block
         block_root = self._get_block_root(eq_tag)
-
-        group = {}
 
         # --- text before block root in same parent ---
         parent = block_root.parent
@@ -625,24 +637,23 @@ class HTMLReader:
                 sents = extract_sentences(before_text)
                 picked = best_sentence(sents)
                 if picked:
-                    group[1] = picked + " [EQUATION]"
+                    return picked + " [EQUATION]"
 
         # --- fallback: walk previous paragraphs until real text found ---
-        if not group:
-            prev_para = block_root.find_previous("p")
-            while prev_para:
-                text = self._extract_text_from_container(prev_para)
-                sents = extract_sentences(text)
-                picked = best_sentence(sents)
-                if picked:
-                    group[1] = picked + " [EQUATION]"
-                    break
-                prev_para = prev_para.find_previous("p")
+        prev_para = block_root.find_previous("p")
+        while prev_para:
+            text = self._extract_text_from_container(prev_para)
+            sents = extract_sentences(text)
+            picked = best_sentence(sents)
+            if picked:
+                return picked + " [EQUATION]"
+            prev_para = prev_para.find_previous("p")
 
-        return [group] if group else []
+        return None
+
     def get_equation_contexts(self):
         """
-        Get context sentences for all equations using only the physical
+        Get context sentence for all equations using only the physical
         location of the equation in HTML. Extracts the last meaningful
         real-text sentence from immediately before the equation block,
         with [EQUATION] appended to mark the equation position.
@@ -651,8 +662,8 @@ class HTMLReader:
         -------
         dict
             Keys are eq_id (mapped), values are dicts with:
-            - 'groups': list with single dict {1: sentence_with_equation_marker}
-            - 'referenced': always False, physical location only
+            - 'context': sentence string with [EQUATION] or None
+            - 'referenced': False, reserved for future reference-based extraction
         """
         result = {}
         for counter, eq in self.equations.items():
@@ -660,31 +671,21 @@ class HTMLReader:
             real_id = eq["real_id"]
 
             if not real_id:
-                result[eq_id] = {"groups": [], "referenced": False}
+                result[eq_id] = {"context": None, "referenced": False}
                 continue
 
-            phys_groups = self._get_physical_location_sentences(real_id)
-            result[eq_id] = {"groups": phys_groups, "referenced": False}
+            context = self._get_physical_location_sentence(real_id)
+            result[eq_id] = {"context": context, "referenced": False}
 
         return result
 
 
 if __name__ == "__main__":
-    paper_ids = ["2407.17199"]
+    paper_ids = ["2510.12545"]
 
     for paper_id in paper_ids:
         reader = HTMLReader(paper_id)
-        eq_contexts = reader.get_equation_contexts()
-
-        for counter, eq in reader.equations.items():
-            eq_id = eq["eq_id"]
-            latex = eq["latex"]
-            ctx = eq_contexts.get(eq_id, {})
-            groups = ctx.get("groups", [])
-
-            print(f"\n{'='*60}")
-            print(f"EQUATION {counter}: {latex}")
-            print(f"{'='*60}")
-            for group in groups:
-                for k, v in sorted(group.items(), key=lambda x: str(x[0])):
-                    print(f"    {k}. {v}")
+        eq_contexts = reader.equations
+        for k, v in eq_contexts.items():
+          print(k)
+          print(v)

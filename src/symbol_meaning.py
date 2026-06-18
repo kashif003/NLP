@@ -71,7 +71,6 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
         Extracted meaning or empty string if no pattern matches.
     """
     # Pattern 1: "SYM is/denotes/represents <NP>"
-    # e.g. "SYM is the learning rate"
     match = re.search(
         r'SYM\s+(?:,\s*)?(is|are|denotes?|represents?|stands\s+for|refers\s+to)\s+([\w\s]+?)(?:[,.]|$)',
         cleaned, re.IGNORECASE
@@ -79,13 +78,11 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
     if match:
         meaning = match.group(2).strip()
         meaning = re.sub(r'^(the|a|an)\s+', '', meaning, flags=re.IGNORECASE)
-        # trim to 4 words max
         words = meaning.split()
         if words:
             return " ".join(words[:4])
 
     # Pattern 2: "SYM , the <NP>" — appositive right of SYM
-    # e.g. "SYM , the Stein exponent"
     match = re.search(
         r'SYM\s*,\s*(?:the|a|an)\s+([\w\s]+?)(?:[,.]|$)',
         cleaned, re.IGNORECASE
@@ -97,7 +94,6 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
             return " ".join(words[:4])
 
     # Pattern 3: "<NP> , SYM" or "<NP> SYM" — NP directly left of SYM (1-4 words)
-    # e.g. "invariant state SYM" or "error probability constraint , SYM"
     match = re.search(
         r'((?:\w+\s+){1,4}),?\s*SYM',
         cleaned, re.IGNORECASE
@@ -110,7 +106,6 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
             return " ".join(words)
 
     # Pattern 4: "<NP> denoted by SYM" or "<NP> called SYM"
-    # e.g. "the Stein exponent denoted by SYM"
     match = re.search(
         r'([\w\s]+?)\s+(?:denoted(?:\s+by)?|called|termed)\s+.*?SYM',
         cleaned, re.IGNORECASE
@@ -124,7 +119,6 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
                 return meaning
 
     # Pattern 5: "of <NP> SYM" or "of the <NP> , SYM"
-    # e.g. "copies of the true state, SYM"
     match = re.search(
         r'of\s+(?:the|a|an)?\s*((?:\w+\s+){0,3}\w+)\s*,?\s*SYM',
         cleaned, re.IGNORECASE
@@ -137,7 +131,6 @@ def _apply_regex_patterns(cleaned: str, sym_idx: int, tokens: list) -> str:
             return meaning
 
     # Pattern 6: "SYM denote/denotes <NP>" (let X denote ...)
-    # e.g. "let SYM denote the state"
     match = re.search(
         r'SYM\s+denotes?\s+(?:the|a|an)?\s*([\w\s]+?)(?:[,.]|$)',
         cleaned, re.IGNORECASE
@@ -208,29 +201,24 @@ def _score_noun_phrases(noun_phrases: list, sym_idx: int, tokens: list) -> str:
         dist = sym_idx - np["end"] if is_left else np["start"] - sym_idx
         score -= dist
 
-        # prefer left side
         if is_left:
             score += 2
 
-        # directly adjacent to SYM
         if is_left and np["end"] == sym_idx - 1:
             score += 4
         if not is_left and np["start"] == sym_idx + 1:
             score += 3
 
-        # defining verb between SYM and NP (right side)
         if not is_left:
             between = [tokens[i].text.lower() for i in range(sym_idx + 1, np["start"]) if i < len(tokens)]
             if any(w in DEFINING_VERBS for w in between):
                 score += 5
 
-        # preposition just before NP (left side)
         if is_left and np["start"] > 0 and np["start"] - 1 < len(tokens):
             prev = tokens[np["start"] - 1].text.lower()
             if prev in {"of", "with", "by", "as"}:
                 score += 3
 
-        # length preference: 2-4 words ideal, penalize very long
         length = len(np["text"].split())
         if 2 <= length <= 4:
             score += 2
@@ -243,7 +231,6 @@ def _score_noun_phrases(noun_phrases: list, sym_idx: int, tokens: list) -> str:
 
     if best_np:
         meaning = re.sub(r'^(the|a|an)\s+', '', best_np["text"].strip(), flags=re.IGNORECASE)
-        # trim to 4 words max
         words = meaning.split()
         if len(words) > 4:
             meaning = " ".join(words[-4:]) if best_np["end"] <= sym_idx else " ".join(words[:4])
@@ -253,7 +240,20 @@ def _score_noun_phrases(noun_phrases: list, sym_idx: int, tokens: list) -> str:
 
 
 def _is_garbage_meaning(meaning: str) -> bool:
-    """Return True if the extracted meaning is just stop words or too short to be useful."""
+    """
+    Return True if the extracted meaning is just stop words or too short
+    to be useful.
+
+    Parameters
+    ----------
+    meaning : str
+        Extracted meaning string to check.
+
+    Returns
+    -------
+    bool
+        True if meaning is garbage.
+    """
     words = meaning.lower().split()
     if not words:
         return True
@@ -267,6 +267,16 @@ def _extract_by_dependency(cleaned: str) -> str:
     Handles two patterns:
       - SYM is/denotes X  →  return X
       - X denotes/called SYM  →  return X
+
+    Parameters
+    ----------
+    cleaned : str
+        Cleaned sentence with SYM placeholder.
+
+    Returns
+    -------
+    str
+        Extracted meaning or empty string.
     """
     doc = nlp(cleaned)
     sym_token = next((t for t in doc if t.text == "SYM"), None)
@@ -340,21 +350,55 @@ def extract_symbol_meaning(symbol: str, context: str) -> str:
     return ""
 
 
+def extract_symbols_from_context(symbol_context: dict) -> dict:
+    """
+    Process output of get_symbol_full_context() and extract meaning
+    for each symbol from its context sentence.
+
+    Parameters
+    ----------
+    symbol_context : dict
+        Output of get_symbol_full_context(). Keys are symbol strings,
+        values are dicts with 'equations' and 'context' keys.
+        Example:
+            {
+                "\\rho": {"equations": ["S1.E1"], "context": "where SYM is the state"},
+                "\\epsilon": {"equations": ["S1.E2"], "context": "SYM denotes error rate"}
+            }
+
+    Returns
+    -------
+    dict
+        Keys are symbol strings, values are extracted meaning strings.
+        Example:
+            {
+                "\\rho": "quantum state",
+                "\\epsilon": "error rate"
+            }
+    """
+    result = {}
+    for symbol, data in symbol_context.items():
+        context = data.get("context")
+        if not context:
+            # no context sentence found for this symbol
+            result[symbol] = ""
+            continue
+        result[symbol] = extract_symbol_meaning(symbol, context)
+    return result
+
+
 if __name__ == "__main__":
-    import json
+    from html_reader import HTMLReader
 
-    with open("equations_data.json", "r") as file:
-        data = json.load(file)
+    paper_id = "2510.12545"
+    reader = HTMLReader(paper_id)
 
-    for eq_idx, (eq_key, symbols) in enumerate(data.items()):
-        print(f"{'='*60}")
-        print(f"EQUATION {eq_idx + 1}: {eq_key}")
-        print(f"{'='*60}")
-        for symbol_data in symbols:
-            symbol, context = symbol_data[0], symbol_data[1]
-            print(f"  Symbol:  {symbol}")
-            print(f"  Context: {context}")
-            print(f"  Cleaned: {clean_sentence(context, symbol)}")
-            print(f"  Meaning: {extract_symbol_meaning(symbol, context)}")
-            print()
+    symbol_context = reader.get_symbol_full_context()
+    symbol_meanings = extract_symbols_from_context(symbol_context)
+
+    for symbol, meaning in symbol_meanings.items():
+        context = symbol_context[symbol].get("context", "None")
+        print(f"Symbol:  {symbol}")
+        print(f"Context: {context}")
+        print(f"Meaning: {meaning}")
         print()
