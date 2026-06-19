@@ -15,11 +15,9 @@ def paper_ID_extractor(path, n= None):
 import os
 import tarfile
 
-import arxiv
 import os
 import tarfile
 import urllib.request  # Used to handle the new download format
-import arxiv
 
 def download_paper(paper_ID):
     """
@@ -96,3 +94,52 @@ def download_paper(paper_ID):
 
 
 
+
+import nltk
+from nltk.tokenize import sent_tokenize
+
+# Run once to download the required tokenizer data (local, no prompting)
+nltk.download("punkt")
+nltk.download("punkt_tab")  # needed for newer NLTK versions (>=3.8.2)
+
+def get_sentences_around_label(text, label, window=1):
+    """
+    Extract sentence-level context around an equation label's occurrences in text.
+
+    Splits the text into sentences and searches for two marker forms derived
+    from the label: the main marker (the equation's own occurrence) and the
+    mention marker (references to that equation). For each matching sentence,
+    a context window of surrounding sentences is collected.
+
+    Args:
+        text (str): The input text to search through.
+        label (str): The wrapped equation label, e.g. "<eq1>". The first and
+            last characters are stripped to obtain the inner label, which is
+            then formatted as "[label]" (main) and "[#label]" (mention).
+        window (int, optional): Number of sentences to include before and
+            after each matching sentence. Defaults to 1.
+
+    Returns:
+        dict: A dictionary with three keys:
+            - "main_context" (list[str]): Context windows for each occurrence
+              of the main marker. Empty if none found.
+            - "mention_context" (list[str]): Context windows for each occurrence
+              of the mention marker. Empty if none found.
+            - "window" (int): The window size used.
+    """
+    sentences = sent_tokenize(text)
+    target = label[1:-1]
+    main_marker = f"[{target}]"
+    mention_marker = f"[#{target}]"
+
+    result = {"main_context": [], "mention_context": [], "window": window}
+    for i, sent in enumerate(sentences):
+        start = max(0, i - window)
+        end = min(len(sentences), i + window + 1)
+        context = " ".join(sentences[start:end])
+
+        if main_marker in sent:
+            result["main_context"].append(context)
+        if mention_marker in sent:
+            result["mention_context"].append(context)
+    return result

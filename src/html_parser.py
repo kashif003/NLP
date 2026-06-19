@@ -397,29 +397,27 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping):
     return result
 
 if __name__ == "__main__":
-    paper_id = "2506.19219"
+    paper_id = "2404.04958"
     extractor = PaperTextExtractor(paper_id)
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
-    print(eqn_mapping)
+    
+    print("[CLEAN TEXT]")
     print(clean_text)
+    print("#"*100)
+    
+    print("[SYMBOL MAPPING]")
+    for k,v in sym_mapping.items():
+        print(k, "->", v)
+    
+    print("#"*100)
+    print("[EQUATION MAPPING]")
+    for k,v in eqn_mapping.items():
+        print(k, "->", v)
 
+    print("#"*100)
+    print("[SYMBOLS IN EQUATIONS]")
     eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
     for eq_ph, syms in eq_to_syms.items():
         print(eq_ph, "->", syms)
         for s in syms:
             print("   ", s, ":", sym_mapping[s])
-
-
-
-    # print("=== EQUATION MAPPING ===")
-    # for placeholder, data in eqn_mapping.items():
-    #     print(f"{placeholder} → real_id: {data['real_id']}")
-    #     print(f"          latex:   {data['latex']}...")
-    #     print()
-
-    # print("=== SYMBOL MAPPING (first 10) ===")
-    # for placeholder, latex in list(sym_mapping.items()):
-    #     print(f"{placeholder} → {latex}")
-
-    # print("\n=== CLEAN TEXT SAMPLE (first 2000 chars) ===")
-    # print(clean_text)
