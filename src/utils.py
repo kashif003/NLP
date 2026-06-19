@@ -97,7 +97,7 @@ def download_paper(paper_ID):
 
 import nltk
 from nltk.tokenize import sent_tokenize
-
+import re
 # Run once to download the required tokenizer data (local, no prompting)
 nltk.download("punkt")
 nltk.download("punkt_tab")  # needed for newer NLTK versions (>=3.8.2)
@@ -107,15 +107,17 @@ def get_sentences_around_label(text, label, window=1):
     Extract sentence-level context around an equation label's occurrences in text.
 
     Splits the text into sentences and searches for two marker forms derived
-    from the label: the main marker (the equation's own occurrence) and the
-    mention marker (references to that equation). For each matching sentence,
-    a context window of surrounding sentences is collected.
+    from the label: the main marker (the equation's own occurrence, e.g.
+    "EQN1") and the mention marker (references to that equation, e.g. "MEQN1").
+    For each matching sentence, a context window of surrounding sentences is
+    collected.
 
     Args:
         text (str): The input text to search through.
-        label (str): The wrapped equation label, e.g. "<eq1>". The first and
+        label (str): The wrapped equation label, e.g. "<EQN1>". The first and
             last characters are stripped to obtain the inner label, which is
-            then formatted as "[label]" (main) and "[#label]" (mention).
+            used directly as the main marker ("EQN1") and prefixed with "M"
+            to form the mention marker ("MEQN1").
         window (int, optional): Number of sentences to include before and
             after each matching sentence. Defaults to 1.
 
@@ -128,9 +130,13 @@ def get_sentences_around_label(text, label, window=1):
             - "window" (int): The window size used.
     """
     sentences = sent_tokenize(text)
-    target = label[1:-1]
-    main_marker = f"[{target}]"
-    mention_marker = f"[#{target}]"
+    main_marker = label
+    mention_marker = f"M{label}"
+
+    # word-boundary matching: bracket-free markers would otherwise collide,
+    # e.g. "EQN1" matching "EQN12" or matching inside the mention "MEQN1".
+    main_re = re.compile(r"\b" + re.escape(main_marker) + r"\b")
+    mention_re = re.compile(r"\b" + re.escape(mention_marker) + r"\b")
 
     result = {"main_context": [], "mention_context": [], "window": window}
     for i, sent in enumerate(sentences):
@@ -138,8 +144,8 @@ def get_sentences_around_label(text, label, window=1):
         end = min(len(sentences), i + window + 1)
         context = " ".join(sentences[start:end])
 
-        if main_marker in sent:
+        if main_re.search(sent):
             result["main_context"].append(context)
-        if mention_marker in sent:
+        if mention_re.search(sent):
             result["mention_context"].append(context)
     return result

@@ -15,23 +15,14 @@ def remove_symbols(text):
     text = re.sub(r"\[SYM\d+\]", "", text)
     return text
 
+def clean(text):
+    text = re.sub(r"\[\s*\d+(?:\s*[,\-–]\s*\d+)*\s*\]", "", text)
 
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-
-nltk.download('punkt')
-nltk.download('stopwords')
-
-def remove_stopwords(text):
-    stop_words = set(stopwords.words('english'))
-    
-    word_tokens = word_tokenize(text)
-    
-    filtered_text = [word for word in word_tokens if word.lower() not in stop_words]
-    
-    # 4. Rejoin the filtered words back into a single string
-    return " ".join(filtered_text)
+    # 4) Normalize whitespace and remove spaces before punctuation
+    text = text.replace("\n", " ")
+    text = re.sub(r"\s+([,.;:!?)])", r"\1", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 def define_equation(eqn, context):
     context = clean_text(context)
@@ -48,19 +39,31 @@ if __name__ == "__main__":
     paper_id =  "2404.04958"  #"2506.19219"    
 
     extractor = PaperTextExtractor(paper_id)
-    eqn = "[EQ(5)]"
+    eqn = "EQN1"
 
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
 
-    context = get_sentences_around_label(clean_text, eqn, window=0)
+    context = get_sentences_around_label(clean_text, eqn, window=1)
 
     print("Main_context:")
     print(context["main_context"])
     print("mention_context:")
     print(context["mention_context"])
     print()
-    print("[REMOVING STOP WORDS...........]")
-    print(remove_stopwords("".join(context["main_context"])))
+    print("[POS TAGGING...........]")
 
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk import pos_tag
+    nltk.download('punkt_tab')
+    nltk.download('averaged_perceptron_tagger_eng')
 
-#-- 
+    text = clean(" ".join( context["main_context"]))
+    words = word_tokenize(text)
+
+    pos_tags = pos_tag(words)
+    print("[ORIGINAL]:", text)
+
+    print("\nPoS Tagging Result:")
+    for word, pos_tag in pos_tags:
+        print(f"{word}: {pos_tag}")

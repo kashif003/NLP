@@ -15,8 +15,8 @@ MAX_EQUATIONS = 7
 class PaperTextExtractor:
     """
     Extracts clean text from arxiv HTML papers replacing enumerated equations
-    with [EQ(1)],[EQ(2)]... non-enumerated equations with [TEMPEQN] and inline
-    math symbols with [SYM1],[SYM2]... Returns clean text and a mapping of
+    with EQN1,EQN2... non-enumerated equations with TEMPEQN and inline
+    math symbols with SYM1,SYM2... Returns clean text and a mapping of
     placeholders to their original latex.
     """
 
@@ -27,8 +27,8 @@ class PaperTextExtractor:
 
         # counters and mappings
         self._sym_counter = 1
-        self.eqn_mapping = {}   # "[EQ(1)]" -> {"latex": ..., "real_id": ...}
-        self.sym_mapping = {}   # "[SYM1]"  -> latex string
+        self.eqn_mapping = {}   # "EQN1" -> {"latex": ..., "real_id": ...}
+        self.sym_mapping = {}   # "SYM1"  -> latex string
         self._sym_seen = {}     # latex string -> placeholder (dedup)
         self._eqn_seen = {}     # real_id -> placeholder (dedup)
 
@@ -153,8 +153,8 @@ class PaperTextExtractor:
     def _get_eqn_placeholder(self, real_id):
         """
         Get or create a placeholder for an equation. Equations found by
-        _find_equations get [EQ(N)] using the paper's displayed number;
-        all others get [TEMPEQN]. Latex is taken from the precomputed
+        _find_equations get EQN<N> using the paper's displayed number;
+        all others get TEMPEQN. Latex is taken from the precomputed
         equation set so it always matches HTMLReader. Deduplicates so the
         same equation always gets the same placeholder.
 
@@ -166,11 +166,11 @@ class PaperTextExtractor:
         Returns
         -------
         str
-            Placeholder string e.g. "[EQ(1)]" or "[TEMPEQN]".
+            Placeholder string e.g. "EQN1" or "TEMPEQN".
         """
         # not in authoritative enumerated set (non-enumerated / beyond limit)
         if real_id not in self.equations:
-            return "[TEMPEQN]"
+            return "TEMPEQN"
 
         # already assigned
         if real_id in self._eqn_seen:
@@ -178,7 +178,7 @@ class PaperTextExtractor:
 
         # new enumerated equation — paper number + precomputed latex
         number = self.equations[real_id]["number"]
-        placeholder = f"[EQ({number})]"
+        placeholder = f"EQN{number}"
         self.eqn_mapping[placeholder] = {
             "latex": self.equations[real_id]["latex"],
             "real_id": real_id,
@@ -199,12 +199,12 @@ class PaperTextExtractor:
         Returns
         -------
         str
-            Placeholder string e.g. "[SYM1]".
+            Placeholder string e.g. "SYM1".
         """
         if alttext in self._sym_seen:
             return self._sym_seen[alttext]
 
-        placeholder = f"[SYM{self._sym_counter}]"
+        placeholder = f"SYM{self._sym_counter}"
         self._sym_counter += 1
         self.sym_mapping[placeholder] = alttext
         self._sym_seen[alttext] = placeholder
@@ -269,7 +269,7 @@ class PaperTextExtractor:
                         break
             if real_id:
                 return " " + self._get_eqn_placeholder(real_id) + " "
-            return " [TEMPEQN] "
+            return " TEMPEQN "
 
         # equation mention — an in-text reference link, where the href is
         # either a bare fragment (#S2.E1) or a full URL ending in the
@@ -288,7 +288,7 @@ class PaperTextExtractor:
                     else:
                         number = re.sub(r'[()]', '', node.get_text()).strip()
                     if number:
-                        return " [#EQ(" + number + ")] "
+                        return " MEQN" + number + " "
 
         # inline math tag — replace with symbol placeholder
         if node.name == "math":
@@ -317,12 +317,12 @@ class PaperTextExtractor:
             (clean_text, eqn_mapping, sym_mapping)
 
             clean_text : str
-                Full paper text with [EQ(1)],[EQ(2)],[TEMPEQN],[SYM1]...
+                Full paper text with EQN1,EQN2,TEMPEQN,SYM1...
             eqn_mapping : dict
-                Keys are placeholder strings like "[EQ(1)]",
+                Keys are placeholder strings like "EQN1",
                 values are dicts with 'latex' and 'real_id'.
             sym_mapping : dict
-                Keys are placeholder strings like "[SYM1]",
+                Keys are placeholder strings like "SYM1",
                 values are latex alttext strings.
         """
         body = self.soup.find("body") or self.soup
@@ -335,9 +335,9 @@ class PaperTextExtractor:
 
         # tidy equation mentions: the "(", ")" and "Eq."/"Equation" wrapper
         # sit outside the link, so a raw reference renders as
-        # "Eq. ( [#EQ(1)] )". collapse it to just "[#EQ(1)]" — the
+        # "Eq. ( MEQN1 )". collapse it to just "MEQN1" — the
         # placeholder already reads as "equation 1".
-        mention = r'\[#EQ\([^)]*\)\]'
+        mention = r'MEQN[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*'
         # case 1: optional Eq word + parentheses around the mention
         clean_text = re.sub(
             r'(?:(?:Eqs?|Eqns?|Equations?)\.?\s*)?\(\s*(' + mention + r')\s*\)',
@@ -365,14 +365,14 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping):
     Parameters
     ----------
     eqn_mapping : dict
-        "[EQ(1)]" -> {"latex": str, "real_id": str}
+        "EQN1" -> {"latex": str, "real_id": str}
     sym_mapping : dict
-        "[SYM1]" -> latex string
+        "SYM1" -> latex string
 
     Returns
     -------
     dict
-        "[EQ(1)]" -> list of symbol placeholders found in that equation.
+        "EQN1" -> list of symbol placeholders found in that equation.
     """
     # precompile a matcher per symbol
     matchers = {}
