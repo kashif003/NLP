@@ -397,27 +397,45 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping):
     return result
 
 if __name__ == "__main__":
-    paper_id = "2404.04958"
-    extractor = PaperTextExtractor(paper_id)
-    clean_text, eqn_mapping, sym_mapping = extractor.extract()
-    
-    print("[CLEAN TEXT]")
-    print(clean_text)
-    print("#"*100)
-    
-    print("[SYMBOL MAPPING]")
-    for k,v in sym_mapping.items():
-        print(k, "->", v)
-    
-    print("#"*100)
-    print("[EQUATION MAPPING]")
-    for k,v in eqn_mapping.items():
-        print(k, "->", v)
+    from pathlib import Path
 
-    print("#"*100)
-    print("[SYMBOLS IN EQUATIONS]")
-    eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
-    for eq_ph, syms in eq_to_syms.items():
-        print(eq_ph, "->", syms)
-        for s in syms:
-            print("   ", s, ":", sym_mapping[s])
+    html_dir = Path("./data/html_source")
+    out_dir = Path("./logs/parsed_papers")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    paper_ids = [f.stem for f in html_dir.iterdir()
+                 if f.is_file() and f.suffix == ".html"]
+
+    for paper_id in paper_ids:
+        try:
+            extractor = PaperTextExtractor(paper_id)
+            clean_text, eqn_mapping, sym_mapping = extractor.extract()
+            eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
+        except Exception as e:
+            print(f"[SKIP] {paper_id}: {e}")
+            continue
+
+        lines = []
+        lines.append("[CLEAN TEXT]")
+        lines.append(clean_text)
+        lines.append("#" * 100)
+
+        lines.append("[SYMBOL MAPPING]")
+        for k, v in sym_mapping.items():
+            lines.append(f"{k} -> {v}")
+        lines.append("#" * 100)
+
+        lines.append("[EQUATION MAPPING]")
+        for k, v in eqn_mapping.items():
+            lines.append(f"{k} -> {v}")
+        lines.append("#" * 100)
+
+        lines.append("[SYMBOLS IN EQUATIONS]")
+        for eq_ph, syms in eq_to_syms.items():
+            lines.append(f"{eq_ph} -> {syms}")
+            for s in syms:
+                lines.append(f"    {s} : {sym_mapping[s]}")
+
+        out_path = out_dir / f"{paper_id}.txt"
+        out_path.write_text("\n".join(lines), encoding="utf-8")
+        print(f"[OK] {paper_id} -> {out_path}")
