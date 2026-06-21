@@ -45,6 +45,7 @@ Path("./results").mkdir(exist_ok=True)
 from html_parser import PaperTextExtractor, map_symbols_to_equations
 from tqdm import tqdm
 from utils import get_sentences_around_label
+from relations import get_relations
 
 from test import get_meaning
 
@@ -79,7 +80,7 @@ def get_meanings(clean_text, eq, audit=None):
 
 
 import json
-html_files = ["2404.04958", "2401.14764", "2401.13724", "2405.07909"]
+html_files = ["2510.12545","2502.16884", "2404.04958", "2506.00504", "2410.07045"]
 for paper_id in tqdm(html_files):
     equation_meaning_dict = {}
     extractor = PaperTextExtractor(paper_id)
@@ -93,9 +94,7 @@ for paper_id in tqdm(html_files):
         if eq not in equation_meaning_dict:
             equation_meaning_dict[index] = {}
 
-        # fresh audit trail for THIS equation only (flat: method -> messages).
-        # everything extracted for this equation writes into it, and it is
-        # stored under the spec's "audit-trail" key at the end.
+        # fresh audit trail for THIS equation only (flat: method -> messages)
         eq_audit = {}
 
         # audit: record the equation that was extracted (latex from html_parser)
@@ -122,6 +121,11 @@ for paper_id in tqdm(html_files):
                 equation_meaning_dict[index]["symbols"] = {}
 
             equation_meaning_dict[index]["symbols"][sym] = eq_meaning        #TODO replace sym with sym_mapping[sym] and get real names without \
+
+        # relations to every other equation in the paper (simple v1 rules)
+        relations = get_relations(eq, equaitons, eq_to_syms, sym_mapping,
+                                  audit=eq_audit)
+        equation_meaning_dict[index]["relations"] = relations
 
         # store this equation's complete audit trail in the output
         equation_meaning_dict[index]["audit-trail"] = eq_audit
