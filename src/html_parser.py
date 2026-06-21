@@ -32,8 +32,26 @@ class PaperTextExtractor:
         self._sym_seen = {}     # latex string -> placeholder (dedup)
         self._eqn_seen = {}     # real_id -> placeholder (dedup)
 
+        # audit trail: method_name -> list of short messages.
+        # a list is used because the same method logs once per equation,
+        # and a plain dict would overwrite previous entries.
+        self.audit = {}
+
         # authoritative equation set, mirrors HTMLReader._find_equations
         self.equations = self._find_equations()   # real_id -> {number, latex}
+
+    def _log(self, method, message):
+        """
+        Append one short audit message under a method name.
+
+        Parameters
+        ----------
+        method : str
+            Name of the method doing the extraction (audit key).
+        message : str
+            Short, precise description of what was extracted.
+        """
+        self.audit.setdefault(method, []).append(message)
 
     def _parse_html(self):
         """
@@ -127,6 +145,14 @@ class PaperTextExtractor:
             latex = self._get_equation_latex(block_root)
 
             equations[eq_id] = {"number": number, "latex": latex}
+
+            # audit: record that this equation was found, with a trimmed
+            # latex snippet so the entry stays short but meaningful.
+            snippet = (latex[:60] + "...") if len(latex) > 60 else latex
+            self._log(
+                "find_equations",
+                f"Found equation {number}: {snippet}",
+            )
 
         return equations
 
@@ -356,7 +382,7 @@ class PaperTextExtractor:
         return clean_text, self.eqn_mapping, self.sym_mapping
 
 
-def map_symbols_to_equations(eqn_mapping, sym_mapping):
+def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
     """
     Find which inline symbols appear in each equation, using boundary-aware
     matching so a single-letter symbol (e.g. 'e') does not falsely match
@@ -368,6 +394,10 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping):
         "EQN1" -> {"latex": str, "real_id": str}
     sym_mapping : dict
         "SYM1" -> latex string
+    audit : dict, optional
+        Flat audit dict (method_name -> list of messages). When given, this
+        function records, per equation, which symbols it matched. Passing the
+        extractor's own ``self.audit`` keeps everything in one place.
 
     Returns
     -------
@@ -391,10 +421,19 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping):
     result = {}
     for eq_ph, eq_data in eqn_mapping.items():
         eq_latex = eq_data.get("latex", "")
-        result[eq_ph] = [
+        found = [
             sym_ph for sym_ph, rx in matchers.items() if rx.search(eq_latex)
         ]
+        result[eq_ph] = found
+
+        # audit: record which symbols were located in this equation.
+        if audit is not None:
+            audit.setdefault("map_symbols_to_equations", []).append(
+                f"{eq_ph}: matched symbols {found}"
+            )
+
     return result
+
 
 if __name__ == "__main__":
     from pathlib import Path
@@ -410,7 +449,10 @@ if __name__ == "__main__":
         try:
             extractor = PaperTextExtractor(paper_id)
             clean_text, eqn_mapping, sym_mapping = extractor.extract()
-            eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
+            # pass the extractor's audit dict so symbol matching is recorded too
+            eq_to_syms = map_symbols_to_equations(
+                eqn_mapping, sym_mapping, audit=extractor.audit
+            )
         except Exception as e:
             print(f"[SKIP] {paper_id}: {e}")
             continue
@@ -435,6 +477,14 @@ if __name__ == "__main__":
             lines.append(f"{eq_ph} -> {syms}")
             for s in syms:
                 lines.append(f"    {s} : {sym_mapping[s]}")
+        lines.append("#" * 100)
+
+        # dump the audit trail so you can inspect what each method extracted
+        lines.append("[AUDIT TRAIL]")
+        for method, messages in extractor.audit.items():
+            lines.append(f"{method}:")
+            for msg in messages:
+                lines.append(f"    {msg}")
 
         out_path = out_dir / f"{paper_id}.txt"
         out_path.write_text("\n".join(lines), encoding="utf-8")
