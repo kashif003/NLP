@@ -12,87 +12,41 @@ def paper_ID_extractor(path, n= None):
             return paper_list
 
 
+import tqdm
+import time
 import os
-import tarfile
+import requests
 
-import os
-import tarfile
-import urllib.request  # Used to handle the new download format
+from utils import paper_ID_extractor
 
-def download_paper(paper_ID):
+def download_html(arxiv_id: str, save_dir: str = "./data/html_source") -> bool:
     """
-    Downloads the paper PDF and LaTeX source from arXiv and stores them in a cache folder.
-    Checks independently if each format is already downloaded.
+    Download HTML version of an arxiv paper and save it locally.
+
+    Parameters
+    ----------
+    arxiv_id : str
+        The arxiv paper ID.
+    save_dir : str
+        Directory to save the HTML files.
+
+    Returns
+    -------
+    bool
+        True if download was successful, False otherwise.
     """
-    # Ensure cache directories exist
-    cache_dir = "data"
-    pdf_cache_dir = os.path.join(cache_dir, "pdf_source")
-    latex_cache_dir = os.path.join(cache_dir, "latex_source")
-    os.makedirs(pdf_cache_dir, exist_ok=True)
-    os.makedirs(latex_cache_dir, exist_ok=True)
+    url = f"https://arxiv.org/html/{arxiv_id}"
+    response = requests.get(url, allow_redirects=True)
 
-    # Define target paths to check presence independently
-    expected_pdf_path = os.path.join(pdf_cache_dir, f"{paper_ID}.pdf")
-    extract_dir_path = os.path.join(latex_cache_dir, paper_ID)
+    if response.status_code != 200:
+        return False
 
-    # If BOTH already exist, we can safely skip the API call
-    if os.path.exists(expected_pdf_path) and os.path.exists(extract_dir_path):
-        print(f"Paper {paper_ID} is already fully cached (PDF & LaTeX).")
-        return
-    
-    # Initialize client and fetch metadata
-    client = arxiv.Client()
-    search = arxiv.Search(id_list=[paper_ID])
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, f"{arxiv_id}.html")
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(response.text)
 
-    try:
-        paper = next(client.results(search))
-    except StopIteration:
-        print(f"Paper {paper_ID} not found on arXiv.")
-        return
-        
-    # Category filter
-    if not any(cat.startswith("quant-ph") for cat in paper.categories):
-        print(f"Paper {paper_ID} skipped (not in quant-ph).")
-        return
-
-    # 1. Download PDF if it doesn't exist yet
-    if not os.path.exists(expected_pdf_path):
-        try:
-            # Using urllib.request.urlretrieve with the paper's pdf_url property
-            urllib.request.urlretrieve(paper.pdf_url, expected_pdf_path)
-            print(f"Successfully downloaded PDF for {paper_ID}")
-        except Exception as e:
-            print(f"[IMPORTANT] Unable to download the PDF for {paper_ID}:", e)
-    else:
-        print(f"PDF for {paper_ID} already exists. Skipping PDF download.")
-
-    # 2. Download and Extract LaTeX Source if it doesn't exist yet
-    if not os.path.exists(extract_dir_path):
-        # Handle source_url whether it's a property or a method safely
-        source_url = paper.source_url() if callable(getattr(paper, "source_url", None)) else paper.source_url
-        
-        if not source_url:
-            print(f"No source URL available for {paper_ID}")
-            return
-            
-        try:
-            os.makedirs(extract_dir_path, exist_ok=True)
-            source_tar_path = os.path.join(extract_dir_path, f"{paper_ID}.tar.gz")
-            
-            # Using urllib.request.urlretrieve with the paper's source_url
-            urllib.request.urlretrieve(source_url, source_tar_path)
-            
-            if tarfile.is_tarfile(source_tar_path):
-                with tarfile.open(source_tar_path, "r:*") as tar:
-                    tar.extractall(path=extract_dir_path, filter='data') 
-                os.remove(source_tar_path)
-                print(f"Successfully extracted LaTeX source for {paper_ID}")
-        except Exception as e:
-            print(f"[IMPORTANT] Unable to download/extract LaTeX for {paper_ID}:", e)
-    else:
-        print(f"LaTeX source for {paper_ID} already exists. Skipping LaTeX download.")
-
-
+    return True
 
 
 import nltk
@@ -149,3 +103,48 @@ def get_sentences_around_label(text, label, window=1):
         if mention_re.search(sent):
             result["mention_context"].append(context)
     return result
+
+
+
+
+
+def strip_backslash(s):
+    """
+    Remove every backslash from a string, for use as a clean JSON key.
+
+    s        : a latex string, e.g. "\\mathcal{L}" or "T_{max}"
+    returns  : the same string with all backslashes removed,
+               e.g. "mathcal{L}", "T_{max}" (unchanged if it had none)
+    """
+    return s.replace("\\", "")
+
+from extract_description import get_description
+def get_meanings(clean_text, eq, audit=None, name_map=None):
+    """
+    Get the meaning of a symbol/equation, trying the main context first and
+    the mention context as a fallback.
+
+    Parameters
+    ----------
+    clean_text : str
+        Full paper text with placeholders.
+    eq : str
+        The placeholder to describe, e.g. "SYM3".
+    audit : dict, optional
+        Flat audit dict (method_name -> list of messages). Forwarded to
+        get_description so the meaning-extraction steps are recorded.
+    name_map : dict, optional
+        Placeholder -> latex map, forwarded so the audit shows latex.
+
+    Returns
+    -------
+    str or None
+        Extracted meaning, or None if nothing was found.
+    """
+    full_context = get_sentences_around_label(clean_text, eq)
+    main_context = " ".join(full_context["main_context"])
+    eq_disc = get_description(main_context, eq, audit=audit, name_map=name_map)
+    if eq_disc is None:
+        mention_context = " ".join(full_context["mention_context"])
+        eq_disc = get_description(mention_context, eq, audit=audit, name_map=name_map)
+    return eq_disc

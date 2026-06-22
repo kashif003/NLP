@@ -1,34 +1,11 @@
-# paper_ids = [
-# "2401.13724",
-# "2408.07125",
-# "2508.05295",
-# "2510.12545",
-# "2410.08937"
-# ]
-
-# start = time.time()
-# for paper_id in paper_ids:
-#     print("paper ID:",paper_id )
-#     reader = HTMLReader(paper_id)
-
-#     content = reader.file_content
-#     equattions= reader.finding_all_equations()
-#     #symbols = reader.get_all_paragraph_symbols()
-#     print(equattions)
-#     # full_context = reader.get_symbol_full_context()
-#     # for symbol, data in full_context.items():
-#     #     print(f"\nSymbol: {symbol}")
-#     #     print(f"In equations: {data['equations']}")
-#     #     print(f"All contexts:")
-#     #     for i, ctx in enumerate(data['contexts']):
-#     #         print(f"  [{i+1}] {ctx}")
-# print("done")
-# end  = time.time()
-# print(end-start)
-
-
 
 from pathlib import Path
+from utils import paper_ID_extractor, download_html, strip_backslash, get_meanings
+paper_list = paper_ID_extractor("./paper_list_12.txt")
+
+
+
+
 
 # Set the directory to the current folder ('.' means current directory)
 current_dir = Path('./data/html_source')
@@ -50,52 +27,18 @@ from relations import get_relations
 from extract_description import get_description
 
 
-def _strip_backslash(s):
-    """
-    Remove every backslash from a string, for use as a clean JSON key.
 
-    s        : a latex string, e.g. "\\mathcal{L}" or "T_{max}"
-    returns  : the same string with all backslashes removed,
-               e.g. "mathcal{L}", "T_{max}" (unchanged if it had none)
-    """
-    return s.replace("\\", "")
-
-
-def get_meanings(clean_text, eq, audit=None, name_map=None):
-    """
-    Get the meaning of a symbol/equation, trying the main context first and
-    the mention context as a fallback.
-
-    Parameters
-    ----------
-    clean_text : str
-        Full paper text with placeholders.
-    eq : str
-        The placeholder to describe, e.g. "SYM3".
-    audit : dict, optional
-        Flat audit dict (method_name -> list of messages). Forwarded to
-        get_description so the meaning-extraction steps are recorded.
-    name_map : dict, optional
-        Placeholder -> latex map, forwarded so the audit shows latex.
-
-    Returns
-    -------
-    str or None
-        Extracted meaning, or None if nothing was found.
-    """
-    full_context = get_sentences_around_label(clean_text, eq)
-    main_context = " ".join(full_context["main_context"])
-    eq_disc = get_description(main_context, eq, audit=audit, name_map=name_map)
-    if eq_disc is None:
-        mention_context = " ".join(full_context["mention_context"])
-        eq_disc = get_description(mention_context, eq, audit=audit, name_map=name_map)
-    return eq_disc
-
-
-import json
-html_files = [ "2404.04958"]
-for paper_id in tqdm(html_files):
-    equation_meaning_dict = {}
+from tqdm import tqdm
+dataset = {}
+for paper_id in tqdm(paper_list[:5]):
+    print("[INFO] Downloading the paper:", paper_id)
+    downloaded =download_html(paper_id)
+    if not downloaded:
+        print("[IMPORTANT] Unable to download the paper:", paper_id)
+        dataset[f"arXiv:{paper_id}"] = "Unable to download the paper"
+        continue
+    
+    dataset[f"arXiv:{paper_id}"] = {}
     extractor = HTML_Reader(paper_id)
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
     eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
@@ -109,8 +52,8 @@ for paper_id in tqdm(html_files):
     print("[INFO] GETTING Meaning of equations......")
     for i, eq in enumerate(equaitons):
         index = i + 1
-        if eq not in equation_meaning_dict:
-            equation_meaning_dict[index] = {}
+        if eq not in dataset[f"arXiv:{paper_id}"]:
+            dataset[f"arXiv:{paper_id}"][index] = {}
 
         # fresh audit trail for THIS equation only (flat: method -> messages)
         eq_audit = {}
@@ -132,25 +75,26 @@ for paper_id in tqdm(html_files):
         
                     
         eq_meaning = get_description(clean_text, eq, audit=eq_audit, name_map=name_map)
-        equation_meaning_dict[index]["equation"] = eqn_mapping[eq]["latex"]             # replace eq with eqn_mapping[eq]["latex"]
-        equation_meaning_dict[index]["meaning"] = eq_meaning
+        dataset[f"arXiv:{paper_id}"][index]["equation"] = eqn_mapping[eq]["latex"]             # replace eq with eqn_mapping[eq]["latex"]
+        dataset[f"arXiv:{paper_id}"][index]["meaning"] = eq_meaning
 
     
 
         for sym in symbols:
             eq_meaning = get_meanings(clean_text, sym, audit=eq_audit, name_map=name_map)
-            if "symbols" not in equation_meaning_dict[index]:
-                equation_meaning_dict[index]["symbols"] = {}
+            if "symbols" not in dataset[f"arXiv:{paper_id}"][index]:
+                dataset[f"arXiv:{paper_id}"][index]["symbols"] = {}
 
-            equation_meaning_dict[index]["symbols"][_strip_backslash(sym_mapping[sym])] = eq_meaning
+            dataset[f"arXiv:{paper_id}"][index]["symbols"][strip_backslash(sym_mapping[sym])] = eq_meaning
 
         # relations to every other equation in the paper (simple v1 rules)
         relations = get_relations(eq, equaitons, eq_to_syms, sym_mapping,
                                   audit=eq_audit)
-        equation_meaning_dict[index]["relations"] = relations
+        dataset[f"arXiv:{paper_id}"][index]["relations"] = relations
 
         # store this equation's complete audit trail in the output
-        equation_meaning_dict[index]["audit-trail"] = eq_audit
+        dataset[f"arXiv:{paper_id}"][index]["audit-trail"] = eq_audit
 
-    with open(f"./results/with_audit/with_audit_{paper_id}.json", "w") as file:
-        json.dump(equation_meaning_dict, file)
+import json
+with open(f"./results/with_audit/dataset.json", "w") as file:
+    json.dump(dataset, file)
