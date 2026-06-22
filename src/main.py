@@ -40,17 +40,28 @@ for item in current_dir.iterdir():
         html_files.append(file_name[:-5])
 
 # make sure the results folder exists, otherwise open(..., "w") will crash
-Path("./results").mkdir(exist_ok=True)
+Path("./results/with_audit").mkdir(parents=True, exist_ok=True)
 
-from html_parser import PaperTextExtractor, map_symbols_to_equations
+from html_parser import HTML_Reader, map_symbols_to_equations
 from tqdm import tqdm
 from utils import get_sentences_around_label
 from relations import get_relations
 
-from test import get_meaning
+from extract_description import get_description
 
 
-def get_meanings(clean_text, eq, audit=None):
+def _strip_backslash(s):
+    """
+    Remove every backslash from a string, for use as a clean JSON key.
+
+    s        : a latex string, e.g. "\\mathcal{L}" or "T_{max}"
+    returns  : the same string with all backslashes removed,
+               e.g. "mathcal{L}", "T_{max}" (unchanged if it had none)
+    """
+    return s.replace("\\", "")
+
+
+def get_meanings(clean_text, eq, audit=None, name_map=None):
     """
     Get the meaning of a symbol/equation, trying the main context first and
     the mention context as a fallback.
@@ -63,7 +74,9 @@ def get_meanings(clean_text, eq, audit=None):
         The placeholder to describe, e.g. "SYM3".
     audit : dict, optional
         Flat audit dict (method_name -> list of messages). Forwarded to
-        get_meaning so the meaning-extraction steps are recorded.
+        get_description so the meaning-extraction steps are recorded.
+    name_map : dict, optional
+        Placeholder -> latex map, forwarded so the audit shows latex.
 
     Returns
     -------
@@ -72,21 +85,26 @@ def get_meanings(clean_text, eq, audit=None):
     """
     full_context = get_sentences_around_label(clean_text, eq)
     main_context = " ".join(full_context["main_context"])
-    eq_disc = get_meaning(main_context, eq, audit=audit)
+    eq_disc = get_description(main_context, eq, audit=audit, name_map=name_map)
     if eq_disc is None:
         mention_context = " ".join(full_context["mention_context"])
-        eq_disc = get_meaning(mention_context, eq, audit=audit)
+        eq_disc = get_description(mention_context, eq, audit=audit, name_map=name_map)
     return eq_disc
 
 
 import json
-html_files = ["2510.12545","2502.16884", "2404.04958", "2506.00504", "2410.07045"]
+html_files = [ "2404.04958"]
 for paper_id in tqdm(html_files):
     equation_meaning_dict = {}
-    extractor = PaperTextExtractor(paper_id)
+    extractor = HTML_Reader(paper_id)
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
     eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
     equaitons = list(eqn_mapping.keys())
+
+    # placeholder -> latex lookup, so the audit shows real latex (T_{max})
+    # instead of placeholders (SYM26 / EQN1). Token search still uses placeholders.
+    name_map = dict(sym_mapping)
+    name_map.update({e: d["latex"] for e, d in eqn_mapping.items()})
 
     print("[INFO] GETTING Meaning of equations......")
     for i, eq in enumerate(equaitons):
@@ -99,28 +117,32 @@ for paper_id in tqdm(html_files):
 
         # audit: record the equation that was extracted (latex from html_parser)
         latex = eqn_mapping[eq]["latex"]
-        snippet = (latex[:60] + "...") if len(latex) > 60 else latex
-        eq_audit.setdefault("extract_equation", []).append(
-            f"{eq}: latex={snippet}"
-        )
+        eq_audit["extract_equations_method"] = latex          #TODO 1. change
 
-        eq_meaning = get_meaning(clean_text, eq, audit=eq_audit)
-        equation_meaning_dict[index]["equation"] = eq               #TODO replace eq with eq_mapping[eq]["latex"]
-        equation_meaning_dict[index]["meaning"] = eq_meaning
-
-        symbols = eq_to_syms[eq]
+        symbols = eq_to_syms[eq]  #TODO 2. first check which symbols are in equation.
 
         # audit: record which symbols were matched into this equation
-        eq_audit.setdefault("map_symbols", []).append(
-            f"{eq}: symbols={symbols}"
-        )
+        eq_audit["map_symbols_to_equations"] = {latex: [sym_mapping[s] for s in symbols]}
+
+        # eq_audit.setdefault("map_symbols", []).append(
+        #     f"map_symbols_to_equations: symbols={[sym_mapping[s] for s in symbols]}" #TODO 3.
+        # )
+
+
+        
+                    
+        eq_meaning = get_description(clean_text, eq, audit=eq_audit, name_map=name_map)
+        equation_meaning_dict[index]["equation"] = eqn_mapping[eq]["latex"]             # replace eq with eqn_mapping[eq]["latex"]
+        equation_meaning_dict[index]["meaning"] = eq_meaning
+
+    
 
         for sym in symbols:
-            eq_meaning = get_meanings(clean_text, sym, audit=eq_audit)
+            eq_meaning = get_meanings(clean_text, sym, audit=eq_audit, name_map=name_map)
             if "symbols" not in equation_meaning_dict[index]:
                 equation_meaning_dict[index]["symbols"] = {}
 
-            equation_meaning_dict[index]["symbols"][sym] = eq_meaning        #TODO replace sym with sym_mapping[sym] and get real names without \
+            equation_meaning_dict[index]["symbols"][_strip_backslash(sym_mapping[sym])] = eq_meaning
 
         # relations to every other equation in the paper (simple v1 rules)
         relations = get_relations(eq, equaitons, eq_to_syms, sym_mapping,
@@ -132,4 +154,3 @@ for paper_id in tqdm(html_files):
 
     with open(f"./results/with_audit/with_audit_{paper_id}.json", "w") as file:
         json.dump(equation_meaning_dict, file)
-  

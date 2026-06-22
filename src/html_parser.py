@@ -12,15 +12,11 @@ EQUATION_BLOCK_CLASSES = {
 MAX_EQUATIONS = 7
 
 
-class PaperTextExtractor:
-    """
-    Extracts clean text from arxiv HTML papers replacing enumerated equations
-    with EQN1,EQN2... non-enumerated equations with TEMPEQN and inline
-    math symbols with SYM1,SYM2... Returns clean text and a mapping of
-    placeholders to their original latex.
-    """
+class HTML_Reader:
+    """Extracts clean text from arXiv HTML papers, replacing math with placeholders."""
 
     def __init__(self, paper_id):
+        """Initialize the extractor with file paths, counters, mappings, and audit trails."""
         self.paper_id = paper_id
         self.html_path = os.path.join("data/html_source", f"{paper_id}.html")
         self.soup = self._parse_html()
@@ -33,54 +29,22 @@ class PaperTextExtractor:
         self._eqn_seen = {}     # real_id -> placeholder (dedup)
 
         # audit trail: method_name -> list of short messages.
-        # a list is used because the same method logs once per equation,
-        # and a plain dict would overwrite previous entries.
         self.audit = {}
 
         # authoritative equation set, mirrors HTMLReader._find_equations
         self.equations = self._find_equations()   # real_id -> {number, latex}
 
     def _log(self, method, message):
-        """
-        Append one short audit message under a method name.
-
-        Parameters
-        ----------
-        method : str
-            Name of the method doing the extraction (audit key).
-        message : str
-            Short, precise description of what was extracted.
-        """
+        """Append a short diagnostic message to the audit log."""
         self.audit.setdefault(method, []).append(message)
 
     def _parse_html(self):
-        """
-        Parse HTML file into BeautifulSoup object.
-
-        Returns
-        -------
-        bs4.BeautifulSoup
-            Parsed HTML document.
-        """
+        """Parse the input HTML file into a BeautifulSoup object."""
         with open(self.html_path, "r", encoding="utf-8", errors="ignore") as f:
             return BeautifulSoup(f.read(), "html.parser")
 
     def _get_block_root(self, tag):
-        """
-        Walk up from tag to the root of a multi-line equation block.
-        Stops when the parent is no longer an equation-type container.
-
-        Parameters
-        ----------
-        tag : bs4.element.Tag
-            Starting tag.
-
-        Returns
-        -------
-        bs4.element.Tag
-            Topmost equation block container, or tag itself if not
-            part of a multi-line block.
-        """
+        """Find the topmost equation block container by walking up parents."""
         current = tag
         while current.parent:
             parent_classes = set(current.parent.get("class") or [])
@@ -91,22 +55,7 @@ class PaperTextExtractor:
         return current
 
     def _find_equations(self):
-        """
-        Find enumerated equations using the exact same traversal, prefix
-        validation, block-root deduplication and MAX_EQUATIONS limit as
-        HTMLReader._find_equations. For each equation it stores the displayed
-        paper number (from the ltx_tag_equation span) and the full latex
-        collected from every math tag in the block root. This guarantees
-        PaperTextExtractor finds exactly the same equations — and the same
-        latex — as HTMLReader.
-
-        Returns
-        -------
-        dict
-            Keys are real HTML id strings, values are dicts with:
-            'number' : displayed equation number e.g. "1", "A.1"
-            'latex'  : full latex string of the equation block
-        """
+        """Locate and track up to MAX_EQUATIONS enumerated equations from the HTML."""
         equations = {}
         current_prefix = None
         section_counter = 1
@@ -146,8 +95,7 @@ class PaperTextExtractor:
 
             equations[eq_id] = {"number": number, "latex": latex}
 
-            # audit: record that this equation was found, with a trimmed
-            # latex snippet so the entry stays short but meaningful.
+            # audit: record that this equation was found
             snippet = (latex[:60] + "...") if len(latex) > 60 else latex
             self._log(
                 "find_equations",
@@ -157,43 +105,23 @@ class PaperTextExtractor:
         return equations
 
     def _get_equation_latex(self, block_root):
-        """
-        Extract full latex string from all math tags in an equation block.
-
-        Parameters
-        ----------
-        block_root : bs4.element.Tag
-            Root of the equation block.
-
-        Returns
-        -------
-        str
-            Latex string of the full equation.
-        """
-        return " ".join(
+        """Extract and concatenate full LaTeX string from all math tags in a block."""
+        raw_latex = " ".join(
             m.get("alttext", "")
             for m in block_root.find_all("math")
             if m.get("alttext")
         )
+        
+        # --- NEW CLEANING STEP ---
+        # Strip \text{} formatting from the equations as well so they match the symbols
+        if raw_latex:
+            raw_latex = re.sub(r'\\text{([^}]+)}', r'\1', raw_latex)
+        # -------------------------
+        
+        return raw_latex
 
     def _get_eqn_placeholder(self, real_id):
-        """
-        Get or create a placeholder for an equation. Equations found by
-        _find_equations get EQN<N> using the paper's displayed number;
-        all others get TEMPEQN. Latex is taken from the precomputed
-        equation set so it always matches HTMLReader. Deduplicates so the
-        same equation always gets the same placeholder.
-
-        Parameters
-        ----------
-        real_id : str
-            Real HTML id of the equation.
-
-        Returns
-        -------
-        str
-            Placeholder string e.g. "EQN1" or "TEMPEQN".
-        """
+        """Get or create a unique placeholder (e.g., EQN1) for a valid equation ID."""
         # not in authoritative enumerated set (non-enumerated / beyond limit)
         if real_id not in self.equations:
             return "TEMPEQN"
@@ -213,20 +141,13 @@ class PaperTextExtractor:
         return placeholder
 
     def _get_sym_placeholder(self, alttext):
-        """
-        Get or create a placeholder for an inline math symbol.
-        Deduplicates so same symbol always gets same placeholder.
+        """Get or create a unique placeholder (e.g., SYM1) for an inline math token."""
+        # --- NEW CLEANING STEP ---
+        # This removes \text{ or \text and the enclosing brackets, leaving just the content
+        if alttext:
+            alttext = re.sub(r'\\text{([^}]+)}', r'\1', alttext)
+        # -------------------------
 
-        Parameters
-        ----------
-        alttext : str
-            Latex alttext of the math tag.
-
-        Returns
-        -------
-        str
-            Placeholder string e.g. "SYM1".
-        """
         if alttext in self._sym_seen:
             return self._sym_seen[alttext]
 
@@ -237,20 +158,7 @@ class PaperTextExtractor:
         return placeholder
 
     def _is_inside_equation(self, tag):
-        """
-        Check if a tag is inside an equation block and should not be
-        processed as inline math.
-
-        Parameters
-        ----------
-        tag : bs4.element.Tag
-            Tag to check.
-
-        Returns
-        -------
-        bool
-            True if tag is inside an equation block.
-        """
+        """Check if a given HTML tag is structurally inside an equation block."""
         for parent in tag.parents:
             parent_classes = set(parent.get("class") or [])
             if parent_classes & EQUATION_BLOCK_CLASSES:
@@ -258,20 +166,7 @@ class PaperTextExtractor:
         return False
 
     def _process_node(self, node):
-        """
-        Recursively process an HTML node and return its text with
-        math and equations replaced by placeholders.
-
-        Parameters
-        ----------
-        node : bs4.element.Tag or NavigableString
-            Node to process.
-
-        Returns
-        -------
-        str
-            Processed text with placeholders.
-        """
+        """Recursively convert HTML text and nodes into placeholder-replaced strings."""
         # plain text node
         if isinstance(node, NavigableString):
             return str(node)
@@ -279,11 +174,6 @@ class PaperTextExtractor:
         # equation block — replace with placeholder
         node_classes = set(node.get("class") or [])
         if node_classes & EQUATION_BLOCK_CLASSES:
-            # the equation id may be on the block node itself (single-line
-            # equation, e.g. <table class="ltx_equation" id="S2.E1">) or on
-            # an inner row (multi-line / grouped equation). check the node's
-            # own id first, then its descendants, matching against the stored
-            # equation set so we always pick the numbered line.
             real_id = None
             own_id = node.get("id")
             if own_id in self.equations:
@@ -297,13 +187,7 @@ class PaperTextExtractor:
                 return " " + self._get_eqn_placeholder(real_id) + " "
             return " TEMPEQN "
 
-        # equation mention — an in-text reference link, where the href is
-        # either a bare fragment (#S2.E1) or a full URL ending in the
-        # fragment (https://arxiv.org/.../2506.19219v3#S5.E52). this applies
-        # to ANY referenced equation, not only the tracked ones: the
-        # displayed number lives in the link text, so we read it from there
-        # (preferring the tracked number when available). non-equation links
-        # fall through and are processed normally.
+        # equation mention
         if node.name == "a":
             href = node.get("href", "")
             if "#" in href:
@@ -318,7 +202,6 @@ class PaperTextExtractor:
 
         # inline math tag — replace with symbol placeholder
         if node.name == "math":
-            # skip if inside equation block
             if self._is_inside_equation(node):
                 return ""
             alttext = node.get("alttext", "")
@@ -333,24 +216,7 @@ class PaperTextExtractor:
         return "".join(parts)
 
     def extract(self):
-        """
-        Extract clean text from the paper with placeholders for equations
-        and symbols. Also returns mappings of placeholders to latex.
-
-        Returns
-        -------
-        tuple
-            (clean_text, eqn_mapping, sym_mapping)
-
-            clean_text : str
-                Full paper text with EQN1,EQN2,TEMPEQN,SYM1...
-            eqn_mapping : dict
-                Keys are placeholder strings like "EQN1",
-                values are dicts with 'latex' and 'real_id'.
-            sym_mapping : dict
-                Keys are placeholder strings like "SYM1",
-                values are latex alttext strings.
-        """
+        """Process the document to extract cleaned text along with its math mappings."""
         body = self.soup.find("body") or self.soup
 
         raw_text = self._process_node(body)
@@ -359,18 +225,13 @@ class PaperTextExtractor:
         clean_text = re.sub(r'\n{3,}', '\n\n', raw_text)
         clean_text = re.sub(r' {2,}', ' ', clean_text)
 
-        # tidy equation mentions: the "(", ")" and "Eq."/"Equation" wrapper
-        # sit outside the link, so a raw reference renders as
-        # "Eq. ( MEQN1 )". collapse it to just "MEQN1" — the
-        # placeholder already reads as "equation 1".
+        # tidy equation mentions
         mention = r'MEQN[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*'
-        # case 1: optional Eq word + parentheses around the mention
         clean_text = re.sub(
             r'(?:(?:Eqs?|Eqns?|Equations?)\.?\s*)?\(\s*(' + mention + r')\s*\)',
             r'\1',
             clean_text,
         )
-        # case 2: leftover Eq word sitting directly before the mention
         clean_text = re.sub(
             r'(?:Eqs?|Eqns?|Equations?)\.?\s*(' + mention + r')',
             r'\1',
@@ -383,36 +244,12 @@ class PaperTextExtractor:
 
 
 def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
-    """
-    Find which inline symbols appear in each equation, using boundary-aware
-    matching so a single-letter symbol (e.g. 'e') does not falsely match
-    inside a longer token (e.g. '\\eta', '\\int', or '\\mathrm{ATI}').
-
-    Parameters
-    ----------
-    eqn_mapping : dict
-        "EQN1" -> {"latex": str, "real_id": str}
-    sym_mapping : dict
-        "SYM1" -> latex string
-    audit : dict, optional
-        Flat audit dict (method_name -> list of messages). When given, this
-        function records, per equation, which symbols it matched. Passing the
-        extractor's own ``self.audit`` keeps everything in one place.
-
-    Returns
-    -------
-    dict
-        "EQN1" -> list of symbol placeholders found in that equation.
-    """
-    # precompile a matcher per symbol
+    """Map which inline symbols appear inside each equation using boundary-aware regex."""
     matchers = {}
     for sym_ph, sym_latex in sym_mapping.items():
         if not sym_latex:
             continue
         if len(sym_latex) == 1 and sym_latex.isalpha():
-            # single letter: must stand alone — not part of a longer
-            # identifier or a \command (so 'e' won't match '\eta',
-            # 'T'/'I' won't match '\mathrm{ATI}', 'i' won't match '\int')
             pattern = r"(?<![A-Za-z\\])" + re.escape(sym_latex) + r"(?![A-Za-z])"
         else:
             pattern = re.escape(sym_latex)
@@ -426,7 +263,6 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
         ]
         result[eq_ph] = found
 
-        # audit: record which symbols were located in this equation.
         if audit is not None:
             audit.setdefault("map_symbols_to_equations", []).append(
                 f"{eq_ph}: matched symbols {found}"
@@ -435,57 +271,55 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
     return result
 
 
-if __name__ == "__main__":
-    from pathlib import Path
+# if __name__ == "__main__":
+#     from pathlib import Path
 
-    html_dir = Path("./data/html_source")
-    out_dir = Path("./logs/parsed_papers")
-    out_dir.mkdir(parents=True, exist_ok=True)
+#     html_dir = Path("./data/html_source")
+#     out_dir = Path("./logs/parsed_papers")
+#     out_dir.mkdir(parents=True, exist_ok=True)
 
-    paper_ids = [f.stem for f in html_dir.iterdir()
-                 if f.is_file() and f.suffix == ".html"]
+#     paper_ids = [f.stem for f in html_dir.iterdir()
+#                  if f.is_file() and f.suffix == ".html"]
 
-    for paper_id in paper_ids:
-        try:
-            extractor = PaperTextExtractor(paper_id)
-            clean_text, eqn_mapping, sym_mapping = extractor.extract()
-            # pass the extractor's audit dict so symbol matching is recorded too
-            eq_to_syms = map_symbols_to_equations(
-                eqn_mapping, sym_mapping, audit=extractor.audit
-            )
-        except Exception as e:
-            print(f"[SKIP] {paper_id}: {e}")
-            continue
+#     for paper_id in paper_ids:
+#         try:
+#             extractor = PaperTextExtractor(paper_id)
+#             clean_text, eqn_mapping, sym_mapping = extractor.extract()
+#             eq_to_syms = map_symbols_to_equations(
+#                 eqn_mapping, sym_mapping, audit=extractor.audit
+#             )
+#         except Exception as e:
+#             print(f"[SKIP] {paper_id}: {e}")
+#             continue
 
-        lines = []
-        lines.append("[CLEAN TEXT]")
-        lines.append(clean_text)
-        lines.append("#" * 100)
+#         lines = [
+#             "[CLEAN TEXT]",
+#             clean_text,
+#             "#" * 100,
+#             "[SYMBOL MAPPING]"
+#         ]
+#         for k, v in sym_mapping.items():
+#             lines.append(f"{k} -> {v}")
+#         lines.append("#" * 100)
 
-        lines.append("[SYMBOL MAPPING]")
-        for k, v in sym_mapping.items():
-            lines.append(f"{k} -> {v}")
-        lines.append("#" * 100)
+#         lines.append("[EQUATION MAPPING]")
+#         for k, v in eqn_mapping.items():
+#             lines.append(f"{k} -> {v}")
+#         lines.append("#" * 100)
 
-        lines.append("[EQUATION MAPPING]")
-        for k, v in eqn_mapping.items():
-            lines.append(f"{k} -> {v}")
-        lines.append("#" * 100)
+#         lines.append("[SYMBOLS IN EQUATIONS]")
+#         for eq_ph, syms in eq_to_syms.items():
+#             lines.append(f"{eq_ph} -> {syms}")
+#             for s in syms:
+#                 lines.append(f"    {s} : {sym_mapping[s]}")
+#         lines.append("#" * 100)
 
-        lines.append("[SYMBOLS IN EQUATIONS]")
-        for eq_ph, syms in eq_to_syms.items():
-            lines.append(f"{eq_ph} -> {syms}")
-            for s in syms:
-                lines.append(f"    {s} : {sym_mapping[s]}")
-        lines.append("#" * 100)
+#         lines.append("[AUDIT TRAIL]")
+#         for method, messages in extractor.audit.items():
+#             lines.append(f"{method}:")
+#             for msg in messages:
+#                 lines.append(f"    {msg}")
 
-        # dump the audit trail so you can inspect what each method extracted
-        lines.append("[AUDIT TRAIL]")
-        for method, messages in extractor.audit.items():
-            lines.append(f"{method}:")
-            for msg in messages:
-                lines.append(f"    {msg}")
-
-        out_path = out_dir / f"{paper_id}.txt"
-        out_path.write_text("\n".join(lines), encoding="utf-8")
-        print(f"[OK] {paper_id} -> {out_path}")
+#         out_path = out_dir / f"{paper_id}.txt"
+#         out_path.write_text("\n".join(lines), encoding="utf-8")
+#         print(f"[OK] {paper_id} -> {out_path}")

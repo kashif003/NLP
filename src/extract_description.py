@@ -54,6 +54,7 @@ REF_WORDS = {
 _LABEL_RE = re.compile(r"^\(?[a-zA-Z0-9]{1,3}\)\s+")
 # leading demonstrative: "this modified algebra" -> "modified algebra"
 _DEMO_RE = re.compile(r"^(this|that|these|those)\s+", re.I)
+_ART_RE = re.compile(r"^(the|a|an)\s+", re.I)
 # orphaned ordinal artifact from symbol stripping: "The -th component"
 _ORD_RE = re.compile(r"\s-(?:th|st|nd|rd)\b", re.I)
 # dangling trailing preposition: "an increase in" -> "an increase"
@@ -79,6 +80,19 @@ def _get_nlp(model="en_core_web_sm"):
         import spacy
         _NLP = spacy.load(model)
     return _NLP
+
+
+def _name(ph, name_map):
+    """
+    Return the latex label of a placeholder for audit display.
+
+    The token SEARCH still uses the placeholder (the clean text contains
+    'SYM26'/'EQN1'); this only changes what is PRINTED in the audit. Falls back
+    to the placeholder itself when no map is given or the key is missing.
+    """
+    if name_map is None:
+        return ph
+    return name_map.get(ph, ph)
 
 
 def _is_symbol(tok):
@@ -120,6 +134,7 @@ def _clean_desc(desc):
     desc = desc.lstrip("\\([{ \t").strip()
     desc = _LABEL_RE.sub("", desc).strip()
     desc = _DEMO_RE.sub("", desc).strip()
+    desc = _ART_RE.sub("", desc).strip()
     desc = _ORD_RE.sub("", desc).strip()
     desc = _TAILPREP_RE.sub("", desc).strip()
     return desc
@@ -360,7 +375,29 @@ def _fallback_nearest_np(doc, tok, symbol_i, chunks):
     return desc, chunk.root
 
 
-def extract_from_doc(doc, symbol, audit=None):
+def _latex_context(doc, name_map):
+    """
+    Build the audit KEY: the context text that was searched, with every
+    placeholder swapped for its latex so the symbol code is visible.
+
+    doc       : the parsed spaCy Doc; doc.text is the searched context, which
+                still contains placeholders like 'SYM41'/'EQN2'.
+    name_map  : placeholder -> latex dict, e.g. {'SYM41': '\\vec{\\lambda}'}.
+    returns   : the context string with placeholders replaced by latex. If no
+                name_map is given, doc.text is returned unchanged.
+
+    Longer placeholders are replaced first so that 'SYM1' cannot corrupt
+    'SYM12' (substring clash).
+    """
+    text = doc.text
+    if not name_map:
+        return text
+    for ph in sorted(name_map, key=len, reverse=True):
+        text = text.replace(ph, name_map[ph])
+    return text
+
+
+def extract_from_doc(doc, symbol, audit=None, name_map=None):
     """
     Core: run on an already-parsed spaCy Doc. Returns the full detail dict.
 
@@ -369,10 +406,15 @@ def extract_from_doc(doc, symbol, audit=None):
     doc : spacy.tokens.Doc
         Parsed sentence/context containing the placeholder.
     symbol : str
-        Placeholder to describe, e.g. "SYM77" or "EQN5".
+        Placeholder to describe, e.g. "SYM77" or "EQN5". This is what we SEARCH
+        for in the text (the text still contains placeholders).
     audit : dict, optional
         Flat audit dict (method_name -> list of messages). Records the chosen
         description, the rule, the confidence, and any rejected anchors/noise.
+    name_map : dict, optional
+        Placeholder -> latex map. When given, every placeholder PRINTED in the
+        audit (the target symbol and any rejected anchor) is shown as its latex
+        instead of "SYM77"/"EQN5". The search is unaffected.
 
     Returns
     -------
@@ -384,10 +426,12 @@ def extract_from_doc(doc, symbol, audit=None):
     tok = _find_symbol_token(doc, symbol)
     if tok is None:
         if audit is not None:
-            audit.setdefault("extract_symbol_description", []).append(
-                f"{symbol}: placeholder not found in context"
-            )
+            audit.setdefault("extract_symbol_description", {})[
+                _latex_context(doc, name_map)] = None
         return result
+
+    # audit key: the ONE sentence containing the symbol, with latex swapped in
+    context = _latex_context(tok.sent.as_doc(), name_map)
 
     chunks = list(doc.noun_chunks)
     token_to_chunk = {t.i: c for c in chunks for t in c}
@@ -396,11 +440,6 @@ def extract_from_doc(doc, symbol, audit=None):
 
     # reject a structural anchor that is a placeholder, a person, or a pronoun
     if anchor is not None and _bad_anchor(anchor):
-        if audit is not None:
-            audit.setdefault("extract_symbol_description", []).append(
-                f"{symbol}: rejected anchor '{anchor.text}' "
-                f"(placeholder/person/pronoun), trying fallback"
-            )
         anchor = None
 
     if anchor is not None:
@@ -414,14 +453,8 @@ def extract_from_doc(doc, symbol, audit=None):
                           head=head.text if head is not None else None,
                           rule=rule, confidence="high")
             if audit is not None:
-                audit.setdefault("extract_symbol_description", []).append(
-                    f"{symbol}: '{desc}' (rule={rule}, conf=high)"
-                )
+                audit.setdefault("extract_symbol_description", {})[context] = desc
             return result
-        if desc and audit is not None:
-            audit.setdefault("extract_symbol_description", []).append(
-                f"{symbol}: rejected noise '{desc}' (structural), trying fallback"
-            )
 
     desc, head = _fallback_nearest_np(doc, tok, tok.i, chunks)
     desc = _clean_desc(desc)
@@ -430,17 +463,14 @@ def extract_from_doc(doc, symbol, audit=None):
                       head=head.text if head is not None else None,
                       rule="fallback_nearest", confidence="low")
         if audit is not None:
-            audit.setdefault("extract_symbol_description", []).append(
-                f"{symbol}: '{desc}' (rule=fallback_nearest, conf=low)"
-            )
+            audit.setdefault("extract_symbol_description", {})[context] = desc
     elif audit is not None:
-        audit.setdefault("extract_symbol_description", []).append(
-            f"{symbol}: no meaning found"
-        )
+        audit.setdefault("extract_symbol_description", {})[context] = None
     return result
 
 
-def extract_symbol_description(text, symbol, model="en_core_web_sm", audit=None):
+def extract_symbol_description(text, symbol, model="en_core_web_sm", audit=None,
+                              name_map=None):
     """
     Parse `text` with spaCy then return the full detail dict.
 
@@ -454,6 +484,8 @@ def extract_symbol_description(text, symbol, model="en_core_web_sm", audit=None)
         spaCy model name.
     audit : dict, optional
         Flat audit dict forwarded to extract_from_doc.
+    name_map : dict, optional
+        Placeholder -> latex map, forwarded so the audit shows latex.
 
     Returns
     -------
@@ -461,10 +493,11 @@ def extract_symbol_description(text, symbol, model="en_core_web_sm", audit=None)
         Full detail dict (see extract_from_doc).
     """
     nlp = _get_nlp(model)
-    return extract_from_doc(nlp(text), symbol, audit=audit)
+    return extract_from_doc(nlp(text), symbol, audit=audit, name_map=name_map)
 
 
-def get_meaning(text, symbol, model="en_core_web_sm", audit=None):
+def get_description(text, symbol, model="en_core_web_sm", audit=None,
+                   name_map=None):
     """
     Simple interface. Pass the text and a symbol/equation placeholder
     (e.g. "SYM77", "EQN3"); get back just the meaning as a string, or
@@ -484,19 +517,23 @@ def get_meaning(text, symbol, model="en_core_web_sm", audit=None):
     audit : dict, optional
         Flat audit dict (method_name -> list of messages). Forwarded so the
         extraction step is recorded in the caller's per-equation audit trail.
+    name_map : dict, optional
+        Placeholder -> latex map, forwarded so the audit shows latex labels
+        (e.g. "T_{max}") instead of placeholders ("SYM26").
 
     Returns
     -------
     str or None
         The extracted meaning, or None if nothing was found.
     """
-    return extract_symbol_description(text, symbol, model, audit=audit)["description"]
+    return extract_symbol_description(text, symbol, model, audit=audit,
+                                     name_map=name_map)["description"]
 
 
-if __name__ == "__main__":
-    print(get_meaning(
-        "It produces the polarization-entangled two-photon state EQN5 "
-        "with adjustable phase SYM77.",
-        "SYM77",
-    ))
-    # -> 'adjustable phase'
+# if __name__ == "__main__":
+#     print(get_meaning(
+#         "It produces the polarization-entangled two-photon state EQN5 "
+#         "with adjustable phase SYM77.",
+#         "SYM77",
+#     ))
+#     # -> 'adjustable phase'

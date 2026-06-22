@@ -50,6 +50,15 @@ def _is_single_letter(latex):
     return len(s) == 1 and s.isalpha()
 
 
+def _eq_number(eq):
+    """
+    Turn an equation placeholder into its printed number, for the audit only.
+    'EQN1' -> '1', 'EQN12' -> '12'. If there is no 'EQN' prefix, the input is
+    returned unchanged.
+    """
+    return eq.replace("EQN", "", 1)
+
+
 def _is_meaningful_symbol(latex):
     """
     True if a symbol's latex is a paper-specific variable worth using to relate
@@ -177,12 +186,13 @@ def get_relations(target_eq, eqn_order, eq_to_syms, sym_mapping, audit=None):
             grade = "none"
             description = ""
 
-        relations[other] = {"grade": grade, "description": description}
+        relations[_eq_number(other)] = {"grade": grade, "description": description}
 
         # audit only meaningful relations (strong / potential)
         if audit is not None and grade != "none":
             audit.setdefault("get_relations", []).append(
-                f"{target_eq} -> {other}: {grade} ({description})"
+                f"{_eq_number(target_eq)} -> {_eq_number(other)}: "
+                f"{grade} ({description})"
             )
 
     return relations
