@@ -331,35 +331,82 @@ def _np_and_head(doc, anchor, symbol_i, token_to_chunk, chunks):
 
 
 def _fallback_nearest_np(doc, tok, symbol_i, chunks):
+    """
+    Phase 2 fallback: choose a noun chunk to describe the symbol by SCORING
+    each candidate, not just taking the nearest one.
+
+    Scoring factors (higher = better):
+      - closer to the symbol               -> -distance
+      - chunk is to the LEFT of the symbol -> +2 (definitions usually precede)
+      - chunk immediately adjacent         -> +4 (left) / +3 (right)
+      - a defining verb (is/denotes/...) sits between symbol and a RIGHT chunk
+                                           -> +5
+      - chunk preceded by of/with/by/as    -> +3
+      - phrase length 2..4 words           -> +2 ; very long (>6) -> -3
+    """
     best = None
+    best_score = float("-inf")
+
     for chunk in chunks:
-        if (_is_symbol(chunk.root) or _is_person(chunk.root)
-                or _is_pron(chunk.root) or _is_verb(chunk.root)):
+        root = chunk.root
+        # never describe the symbol with a placeholder/person/pronoun/verb chunk
+        if (_is_symbol(root) or _is_person(root)
+                or _is_pron(root) or _is_verb(root)):
             continue
-        dist = tok.i - chunk.root.i
-        key = (0 if dist > 0 else 1, abs(dist))
-        if best is None or key < best[0]:
-            best = (key, chunk)
+
+        is_left = chunk.end <= symbol_i
+        dist = symbol_i - chunk.end if is_left else chunk.start - symbol_i
+
+        score = -dist
+        if is_left:
+            score += 2
+        if is_left and chunk.end == symbol_i:          # immediately left
+            score += 4
+        if (not is_left) and chunk.start == symbol_i + 1:  # immediately right
+            score += 3
+
+        # defining verb between symbol and a right-side chunk
+        if not is_left:
+            between = [doc[i].lemma_.lower()
+                       for i in range(symbol_i + 1, chunk.start)
+                       if 0 <= i < len(doc)]
+            if any(w in DEF_VERB_LEMMAS for w in between):
+                score += 5
+
+        # preposition just before a left-side chunk (e.g. "of <NP>")
+        if is_left and chunk.start - 1 >= 0:
+            prev = doc[chunk.start - 1].lower_
+            if prev in {"of", "with", "by", "as"}:
+                score += 3
+
+        length = len([t for t in chunk if t.i != symbol_i and not _is_symbol(t)])
+        if 2 <= length <= 4:
+            score += 2
+        elif length > 6:
+            score -= 3
+
+        if score > best_score:
+            best_score = score
+            best = chunk
+
     if best is None:
         return None, None
-    chunk = best[1]
-    desc = "".join(t.text_with_ws for t in chunk
+
+    desc = "".join(t.text_with_ws for t in best
                    if t.i != symbol_i and not _is_symbol(t)).strip()
-    desc = _extend_of_pp(doc, chunk, desc, chunks, symbol_i)
-    desc = _prepend_of_governor(doc, chunk, desc, chunks, symbol_i)
-    return desc, chunk.root
+    desc = _extend_of_pp(doc, best, desc, chunks, symbol_i)
+    desc = _prepend_of_governor(doc, best, desc, chunks, symbol_i)
+    return desc, best.root
 
 
 def _latex_context(doc, name_map, target_ph=None):
     text = doc.text
-    if not name_map:
+    if not name_map or target_ph is None:
         return text
-    for ph in sorted(name_map, key=len, reverse=True):
-        latex = name_map[ph]
-        if ph == target_ph:
-            latex = f"${latex}$"
-        text = text.replace(ph, latex)
-    return text
+    # only the TARGET placeholder becomes latex, wrapped in $...$.
+    # every other placeholder (SYM/EQN/MEQN) is left in its encoded form.
+    target_latex = name_map.get(target_ph, target_ph)
+    return text.replace(target_ph, f"${target_latex}$")
 
 
 def _sentence_key(tok, head, name_map, target_ph):
@@ -403,7 +450,9 @@ def extract_from_doc(doc, symbol, audit=None, name_map=None):
                           rule=rule, confidence="high")
             if audit is not None:
                 key = _sentence_key(tok, head, name_map, symbol)
-                audit.setdefault("extract_symbol_description", {})[key] = desc
+                audit.setdefault("extract_symbol_description", {})[key] = (
+                    f"{desc} (rule={rule}, conf=high)"
+                )
             return result
 
     desc, head = _fallback_nearest_np(doc, tok, tok.i, chunks)
@@ -416,7 +465,9 @@ def extract_from_doc(doc, symbol, audit=None, name_map=None):
                       rule="fallback_nearest", confidence="low")
         if audit is not None:
             key = _sentence_key(tok, head, name_map, symbol)
-            audit.setdefault("extract_symbol_description", {})[key] = desc
+            audit.setdefault("extract_symbol_description", {})[key] = (
+                f"{desc} (rule=fallback_nearest, conf=low)"
+            )
     elif audit is not None:
         key = _sentence_key(tok, None, name_map, symbol)
         audit.setdefault("extract_symbol_description", {})[key] = None
@@ -430,6 +481,17 @@ def extract_symbol_description(text, symbol, model="en_core_web_trf", audit=None
 
 
 def get_description(text, symbol, model="en_core_web_trf", audit=None,
-                   name_map=None):
-    return extract_symbol_description(text, symbol, model, audit=audit,
-                                     name_map=name_map)["description"]
+                   name_map=None, return_conf=False):
+    """
+    Return the description string for `symbol`.
+
+    return_conf : if True, return (description, confidence) where confidence is
+                  "high" for a Phase-1 structural rule, "low" for the Phase-2
+                  fallback, or None if nothing was found. If False (default),
+                  return just the description string (unchanged behavior).
+    """
+    res = extract_symbol_description(text, symbol, model, audit=audit,
+                                     name_map=name_map)
+    if return_conf:
+        return res["description"], res["confidence"]
+    return res["description"]

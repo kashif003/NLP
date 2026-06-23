@@ -95,9 +95,13 @@ for paper_id in tqdm(paper_list[:10]):
                 paper_dataset[f"arXiv:{paper_id}"][index]["symbols"] = {}
             paper_dataset[f"arXiv:{paper_id}"][index]["symbols"][strip_backslash(sym_mapping[sym])] = sym_meaning
 
-        # --- equation meaning: if the LHS IS one of the equation's symbols,
-        # reuse that symbol's meaning (the equation defines it). Raw latex on
-        # both sides. Otherwise fall back to the general meaning pipeline. ---
+        # --- equation meaning ---
+        # Phase 1 + Phase 2 run together inside get_description; conf tells which
+        # produced it ("high" = Phase-1 structural rule, "low" = Phase-2 fallback).
+        eq_meaning, conf = get_description(clean_text, eq, audit=eq_audit,
+                                           name_map=name_map, return_conf=True)
+
+        # does the LHS equal one of this equation's symbols? (raw latex on both)
         lhs = extract_lhs(latex)
         lhs_symbol = None
         if lhs:
@@ -106,13 +110,13 @@ for paper_id in tqdm(paper_list[:10]):
                     lhs_symbol = s
                     break
 
-        if lhs_symbol is not None and sym_meanings_by_ph.get(lhs_symbol):
+        # REPLACE only a Phase-2 (low-confidence) meaning, and only when the LHS
+        # matches a symbol that has a meaning. Phase-1 (high) results are kept.
+        if (conf != "high") and lhs_symbol is not None and sym_meanings_by_ph.get(lhs_symbol):
             eq_meaning = sym_meanings_by_ph[lhs_symbol]
             eq_audit.setdefault("equation_meaning_method", {})[latex] = (
-                f"LHS '{lhs}' matches symbol -> reuse its meaning: {eq_meaning}"
+                f"Phase-2 result replaced: LHS '{lhs}' matches symbol -> {eq_meaning}"
             )
-        else:
-            eq_meaning = get_description(clean_text, eq, audit=eq_audit, name_map=name_map)
 
         paper_dataset[f"arXiv:{paper_id}"][index]["meaning"] = eq_meaning
 
@@ -175,5 +179,4 @@ for paper_id in tqdm(paper_list[:10]):
     # ---------- PASS 3: Save this specific paper's JSON before moving to the next ----------
     with open(f"./results/with_audit/{paper_id}.json", "w") as file:
         json.dump(paper_dataset, file, indent=4) # Added indent=4 to make your JSON files beautiful and readable!
-    
     break

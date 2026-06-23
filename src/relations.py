@@ -199,12 +199,14 @@ def get_relations(target_eq, eqn_order, eq_to_syms, sym_mapping, eqn_mapping=Non
         if defining:
             # rule 0: other defines a shared symbol -> subset/defining -> strong
             grade = "strong"
-            description = ("equation " + _eq_number(other) + " defines "
-                           + ", ".join(sorted(defining)) + " used here")
+            description = ("special case; equation " + _eq_number(other)
+                           + " defines " + ", ".join(sorted(defining))
+                           + " used here")
         elif multi:
             # rule 1: a discriminating multi-character variable -> strong
             grade = "strong"
-            description = "shares symbol(s): " + ", ".join(sorted(multi))
+            description = ("related; shares symbol(s): "
+                           + ", ".join(sorted(multi)))
         elif single:
             # rule 2: only bare single-letter variable(s) shared -> potential
             grade = "potential"

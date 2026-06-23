@@ -7,7 +7,7 @@ def _replace_if_math(m: re.Match) -> str:
         return ''     # here was sym
     return m.group(0)
 
-def clean_text(text: str) -> str:
+def clean_text_2(text: str) -> str:
     # --- fix python-mangled latex commands first ---
     text = re.sub(r'\x08(inom|f|ar|ull)', r'\\b\1', text)
     text = re.sub(r'\t(heta|imes|op|au|ext|ilde|extbf|extit)', r'\\t\1', text)

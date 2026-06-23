@@ -148,6 +148,15 @@ class HTML_Reader:
             alttext = re.sub(r'\\text{([^}]+)}', r'\1', alttext)
         # -------------------------
 
+        # --- SKIP STANDALONE NUMBERS ---
+        # A pure number like "2", "0.5", "-3" is not a symbol worth tracking.
+        # We strip a leading sign and one decimal point; if what remains is all
+        # digits, it's standalone -> return "" (no placeholder, dropped from text).
+        # "\omega_{2}" keeps its letters/braces, so isdigit() is False -> kept.
+        if alttext and alttext.strip().lstrip("+-").replace(".", "", 1).isdigit():
+            return ""
+        # -------------------------------
+
         if alttext in self._sym_seen:
             return self._sym_seen[alttext]
 
@@ -269,5 +278,3 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
             )
 
     return result
-
-
