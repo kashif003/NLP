@@ -5,7 +5,6 @@ from tqdm import tqdm
 from utils import get_sentences_around_label
 from relations import get_relations
 from extract_description import get_description, extract_lhs
-from nltk.tokenize import sent_tokenize
 import json
 
 paper_list = paper_ID_extractor("./paper_list_12.txt")
@@ -46,10 +45,6 @@ for paper_id in tqdm(paper_list[:10]):
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
     eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
     equaitons = list(eqn_mapping.keys())
-
-    # split the whole paper into sentences ONCE, reused for every symbol below
-    # (avoids re-running sent_tokenize on the full paper per symbol).
-    paper_sentences = sent_tokenize(clean_text)
 
     # placeholder -> latex lookup, so the audit shows real latex (T_{max})
     # instead of placeholders (SYM26 / EQN1). Token search still uses placeholders.
@@ -94,8 +89,7 @@ for paper_id in tqdm(paper_list[:10]):
         # can reuse a symbol's meaning directly by its placeholder.
         sym_meanings_by_ph = {}
         for sym in symbols:
-            sym_meaning = get_meanings(clean_text, sym, audit=eq_audit, name_map=name_map,
-                                       sentences=paper_sentences)
+            sym_meaning = get_meanings(clean_text, sym, audit=eq_audit, name_map=name_map)
             sym_meanings_by_ph[sym] = sym_meaning
             if "symbols" not in paper_dataset[f"arXiv:{paper_id}"][index]:
                 paper_dataset[f"arXiv:{paper_id}"][index]["symbols"] = {}
