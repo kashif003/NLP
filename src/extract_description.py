@@ -59,12 +59,36 @@ def _get_nlp(model="en_core_web_trf"):
     global _NLP
     if _NLP is None:
         import spacy
+        spacy.prefer_gpu()          # use GPU if available; silently CPU if not
         try:
             _NLP = spacy.load(model)
         except OSError:
             print(f"⚠️ Model '{model}' not found. Falling back to 'en_core_web_sm'.")
             _NLP = spacy.load("en_core_web_sm")
     return _NLP
+
+
+def extract_many(texts_and_symbols, audit=None, name_map=None,
+                 model="en_core_web_trf", batch_size=32):
+    """
+    Parse MANY contexts in one GPU batch.
+
+    texts_and_symbols : list of (text, symbol) pairs, e.g.
+                        [(ctx1, "SYM3"), (ctx2, "SYM4"), ...]
+    returns           : list of meaning strings (or None), aligned to the input
+                        order.
+    """
+    nlp = _get_nlp(model)
+    texts = [t for t, _ in texts_and_symbols]        # just the context strings
+    symbols = [s for _, s in texts_and_symbols]      # aligned symbols
+
+    results = []
+    # nlp.pipe parses the whole list together -> GPU stays busy
+    docs = nlp.pipe(texts, batch_size=batch_size)
+    for doc, symbol in zip(docs, symbols):
+        r = extract_from_doc(doc, symbol, audit=audit, name_map=name_map)
+        results.append(r["description"])
+    return results
 
 
 def extract_lhs(equation_text):
