@@ -5,11 +5,9 @@ Grades:
   - the two equations share a DISCRIMINATING symbol (a real, multi-character,
     non-ubiquitous variable)                            -> "strong"
   - they share only a bare single-letter variable       -> "potential"
-  - they share nothing discriminating but are adjacent
-    in the paper (next to each other in equation order) -> "potential"
   - otherwise                                           -> "none"
 
-Three guards keep the grades meaningful and general across papers:
+Two guards keep the grades meaningful and general across papers:
   1. UBIQUITOUS symbols (present in ~every equation, e.g. 'z', 'a_{1}') carry
      no information -> removed before grading.
   2. NON-VARIABLE tokens -- pure numbers ('1', '0.5') and standard math
@@ -25,11 +23,12 @@ Three guards keep the grades meaningful and general across papers:
 import math
 import re
 
+from nltk.corpus import stopwords
+
 UBIQUITY_RATIO = 0.8  # a symbol in >= this fraction of equations is "ubiquitous"
 
 # latex of standard operators / universal constants that are NOT paper-specific
 # variables. Sharing one of these between two equations is not a real relation.
-# Extend this set if you spot more in your papers.
 NON_VARIABLE_LATEX = {
     r"\infty", r"\pi", r"\int", r"\iint", r"\iiint", r"\oint",
     r"\sum", r"\prod", r"\partial", r"\nabla", r"\cdot", r"\times",
@@ -40,8 +39,30 @@ NON_VARIABLE_LATEX = {
 }
 
 # a purely numeric literal: "1", "2", "0.5", "-0.5", "1.07623", "10^{-8}", ...
-# (digits plus math punctuation/braces, but no real letters)
 _NUMERIC_RE = re.compile(r"^[\s\d.,+\-*/^_{}()\\]*\d[\s\d.,+\-*/^_{}()\\]*$")
+
+# a symbol sitting immediately to the left of an '=' (a "definition").
+# starts with a letter or backslash, then letters/digits/_/^/braces/backslash.
+_DEF_RE = re.compile(r"([A-Za-z\\][A-Za-z0-9_^{}\\]*)\s*=")
+
+# English stopwords (the, is, of, ...) loaded once. Plus the lowercased remains
+# of our placeholders (SYM3 -> 'sym', EQN2 -> 'eqn'), which must NOT count as
+# shared content words.
+_STOP = set(stopwords.words("english"))
+_PLACEHOLDER_WORDS = {"sym", "eqn", "meqn", "tempeqn"}
+
+
+def _content_words(text):
+    """
+    Turn a context string into a SET of content words: lowercased alphabetic
+    words, with stopwords and placeholder remains removed.
+
+    text : the context text around an equation.
+    returns : set of meaningful words, e.g. {"wave", "function"}.
+    """
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+    return {w for w in words
+            if w not in _STOP and w not in _PLACEHOLDER_WORDS}
 
 
 def _is_single_letter(latex):
@@ -53,10 +74,30 @@ def _is_single_letter(latex):
 def _eq_number(eq):
     """
     Turn an equation placeholder into its printed number, for the audit only.
-    'EQN1' -> '1', 'EQN12' -> '12'. If there is no 'EQN' prefix, the input is
-    returned unchanged.
+    'EQN1' -> '1', 'EQN12' -> '12'.
     """
     return eq.replace("EQN", "", 1)
+
+
+def _lhs(latex):
+    """
+    Return the SET of symbols an equation defines: the token left of every '='.
+    'G_{t}=.. , G_{r}=.. and L_{r}=..' -> {'G_{t}', 'G_{r}', 'L_{r}'}.
+    No '=' -> empty set.
+
+    latex : the equation's latex string (eqn_mapping[eq]["latex"]).
+    """
+    return {m.group(1) for m in _DEF_RE.finditer(latex)}
+
+
+def _norm(latex):
+    """
+    Normalize a latex string for comparison by removing all whitespace, so
+    'M (t)' and 'M(t)' compare equal.
+
+    latex : any latex string (a symbol's latex, or an equation's LHS).
+    """
+    return re.sub(r"\s+", "", latex)
 
 
 def _is_meaningful_symbol(latex):
@@ -64,16 +105,6 @@ def _is_meaningful_symbol(latex):
     True if a symbol's latex is a paper-specific variable worth using to relate
     equations. Excludes empty strings, pure numeric literals, and standard
     operators / universal constants.
-
-    Parameters
-    ----------
-    latex : str
-        The symbol's latex (e.g. 'x^{i}', '1', '\\infty').
-
-    Returns
-    -------
-    bool
-        False for numbers and standard operators/constants, True otherwise.
     """
     s = latex.strip()
     if not s:
@@ -90,21 +121,6 @@ def _ubiquitous_symbols(eqn_order, eq_to_syms):
     Return the set of symbol placeholders that appear in (nearly) every
     equation of the paper. Excluded from the 'strong' decision because every
     pair trivially shares them.
-
-    The threshold is max(3, ceil(UBIQUITY_RATIO * N)) so small papers are not
-    over-filtered (a symbol must be in at least 3 equations to count).
-
-    Parameters
-    ----------
-    eqn_order : list of str
-        All equation placeholders in the paper.
-    eq_to_syms : dict
-        {"EQN1": ["SYM4", "SYM52"], ...}
-
-    Returns
-    -------
-    set
-        Symbol placeholders considered ubiquitous.
     """
     n = len(eqn_order)
     if n < 2:
@@ -112,12 +128,13 @@ def _ubiquitous_symbols(eqn_order, eq_to_syms):
     threshold = max(3, math.ceil(UBIQUITY_RATIO * n))
     counts = {}
     for eq in eqn_order:
-        for sym in set(eq_to_syms.get(eq, [])):   # set() so a symbol counts once per eq
+        for sym in set(eq_to_syms.get(eq, [])):
             counts[sym] = counts.get(sym, 0) + 1
     return {sym for sym, c in counts.items() if c >= threshold}
 
 
-def get_relations(target_eq, eqn_order, eq_to_syms, sym_mapping, audit=None):
+def get_relations(target_eq, eqn_order, eq_to_syms, sym_mapping, eqn_mapping=None,
+                  eq_context=None, audit=None):
     """
     Classify the relation of `target_eq` to every other equation in the paper.
 
@@ -126,65 +143,86 @@ def get_relations(target_eq, eqn_order, eq_to_syms, sym_mapping, audit=None):
     target_eq : str
         The equation we are describing, e.g. "EQN3".
     eqn_order : list of str
-        All equation placeholders, in their original order. Order is used for
-        the adjacency rule.
+        All equation placeholders, in their original order.
     eq_to_syms : dict
         {"EQN1": ["SYM4", "SYM52"], ...} — symbols contained in each equation.
     sym_mapping : dict
-        {"SYM52": "z", ...} — used to print shared symbols and to classify
-        them (numeric / operator / single-letter / variable).
+        {"SYM52": "z", ...} — used to print shared symbols and to classify them.
     audit : dict, optional
-        Flat audit dict (method_name -> list of messages). Only "strong" and
-        "potential" relations are logged; "none" leaves no trace.
+        Flat audit dict (method_name -> list of messages).
 
     Returns
     -------
     dict
         {"EQN1": {"grade": ..., "description": ...}, ...} for every OTHER
-        equation in the paper (including "none" pairs).
+        equation in the paper.
     """
     relations = {}
-    ubiquitous = _ubiquitous_symbols(eqn_order, eq_to_syms)
-    target_syms = set(eq_to_syms.get(target_eq, []))
-    t_idx = eqn_order.index(target_eq)
+    # convert the ubiquitous ID set to latex, so it can be subtracted from the
+    # latex-based shared set below
+    ubiquitous = {sym_mapping.get(s, s)
+                  for s in _ubiquitous_symbols(eqn_order, eq_to_syms)}
+    # target symbols as LATEX strings (e.g. "\phi"), not IDs (e.g. "SYM4"),
+    # so two equations sharing the same latex via different IDs still match
+    target_syms = {sym_mapping.get(s, s) for s in eq_to_syms.get(target_eq, [])}
 
-    for other in eqn_order:
+    # content words of the target equation's context (for the 2nd-pass check)
+    target_words = (_content_words(eq_context.get(target_eq, ""))
+                    if eq_context is not None else set())
+
+    # Using enumerate for an easy, efficient index lookup
+    for other_idx, other in enumerate(eqn_order):
         if other == target_eq:
             continue
 
-        other_syms = set(eq_to_syms.get(other, []))
+        other_syms = {sym_mapping.get(s, s) for s in eq_to_syms.get(other, [])}
 
-        # discriminating shared symbols: drop ubiquitous ones, then drop any
-        # that are not real variables (numbers / standard operators / constants)
+        # discriminating shared symbols: drop ubiquitous ones and non-variables.
+        # every element here is already latex, so we test it directly.
         shared = (target_syms & other_syms) - ubiquitous
-        shared = {s for s in shared
-                  if _is_meaningful_symbol(sym_mapping.get(s, ""))}
+        shared = {s for s in shared if _is_meaningful_symbol(s)}
+
+        # does `other` DEFINE any shared symbol? i.e. is a shared symbol equal
+        # to other's left-hand side? if so, other is a definition feeding this
+        # equation -> a subset/defining relation, not just "same symbols".
+        defining = []
+        if eqn_mapping is not None and shared:
+            defined = {_norm(d)
+                       for d in _lhs(eqn_mapping.get(other, {}).get("latex", ""))}
+            if defined:
+                defining = [s for s in shared if _norm(s) in defined]
 
         # split the remaining shared symbols into multi-char vs single-letter
-        multi = [s for s in shared
-                 if not _is_single_letter(sym_mapping.get(s, ""))]
-        single = [s for s in shared
-                  if _is_single_letter(sym_mapping.get(s, ""))]
+        multi = [s for s in shared if not _is_single_letter(s)]
+        single = [s for s in shared if _is_single_letter(s)]
 
-        if multi:
+        if defining:
+            # rule 0: other defines a shared symbol -> subset/defining -> strong
+            grade = "strong"
+            description = ("equation " + _eq_number(other) + " defines "
+                           + ", ".join(sorted(defining)) + " used here")
+        elif multi:
             # rule 1: a discriminating multi-character variable -> strong
             grade = "strong"
-            latex = [sym_mapping.get(s, s) for s in sorted(multi)]
-            description = "shares symbol(s): " + ", ".join(latex)
+            description = "shares symbol(s): " + ", ".join(sorted(multi))
         elif single:
-            # rule 2: only bare single-letter variable(s) shared -> weak -> potential
+            # rule 2: only bare single-letter variable(s) shared -> potential
             grade = "potential"
-            latex = [sym_mapping.get(s, s) for s in sorted(single)]
             description = ("shares only single-letter symbol(s): "
-                           + ", ".join(latex))
-        elif abs(eqn_order.index(other) - t_idx) == 1:
-            # rule 3: nothing discriminating shared but adjacent -> potential
-            grade = "potential"
-            description = "adjacent equation in the paper"
+                           + ", ".join(sorted(single)))
         else:
-            # rule 4: no relation
+            # rule 3: no symbol relation
             grade = "none"
             description = ""
+
+        # second pass: if still "none", compare CONTEXT. shared non-stopword
+        # terms between the two equations' contexts -> upgrade to potential.
+        if grade == "none" and eq_context is not None:
+            other_words = _content_words(eq_context.get(other, ""))
+            common = sorted(target_words & other_words)
+            if common:
+                grade = "potential"
+                description = "shares context terms: " + ", ".join(common)
 
         relations[_eq_number(other)] = {"grade": grade, "description": description}
 

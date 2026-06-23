@@ -375,7 +375,7 @@ def _fallback_nearest_np(doc, tok, symbol_i, chunks):
     return desc, chunk.root
 
 
-def _latex_context(doc, name_map):
+def _latex_context(doc, name_map, target_ph=None):
     """
     Build the audit KEY: the context text that was searched, with every
     placeholder swapped for its latex so the symbol code is visible.
@@ -383,6 +383,9 @@ def _latex_context(doc, name_map):
     doc       : the parsed spaCy Doc; doc.text is the searched context, which
                 still contains placeholders like 'SYM41'/'EQN2'.
     name_map  : placeholder -> latex dict, e.g. {'SYM41': '\\vec{\\lambda}'}.
+    target_ph : the placeholder of the symbol being described, e.g. 'SYM41'.
+                Its latex is wrapped in $...$ so it is easy to spot among other
+                symbols in the sentence. Other placeholders stay plain.
     returns   : the context string with placeholders replaced by latex. If no
                 name_map is given, doc.text is returned unchanged.
 
@@ -393,8 +396,34 @@ def _latex_context(doc, name_map):
     if not name_map:
         return text
     for ph in sorted(name_map, key=len, reverse=True):
-        text = text.replace(ph, name_map[ph])
+        latex = name_map[ph]
+        if ph == target_ph:
+            latex = f"${latex}$"
+        text = text.replace(ph, latex)
     return text
+
+
+def _sentence_key(tok, head, name_map, target_ph):
+    """
+    Build the audit KEY from only the relevant sentence(s):
+      - the sentence that contains the target symbol (tok), and
+      - the sentence that contains the chosen description (head).
+    If both fall in the SAME sentence, only that one sentence is returned.
+    The target symbol is wrapped in $...$ for visibility.
+
+    tok       : spaCy token of the target symbol; tok.sent is its sentence.
+    head      : spaCy token the description was taken from, or None.
+    name_map  : placeholder -> latex map.
+    target_ph : the target placeholder, wrapped in $...$.
+    """
+    sents = [tok.sent]
+    # add the description's sentence only if it is a DIFFERENT sentence
+    if head is not None and head.sent.start != tok.sent.start:
+        sents.append(head.sent)
+    sents.sort(key=lambda s: s.start)          # keep reading order
+    parts = [_latex_context(s.as_doc(), name_map, target_ph=target_ph)
+             for s in sents]
+    return " ".join(parts)
 
 
 def extract_from_doc(doc, symbol, audit=None, name_map=None):
@@ -430,9 +459,8 @@ def extract_from_doc(doc, symbol, audit=None, name_map=None):
                 _latex_context(doc, name_map)] = None
         return result
 
-    # audit key: the ONE sentence containing the symbol, with latex swapped in
-    context = _latex_context(tok.sent.as_doc(), name_map)
-
+    # audit key is built later from the symbol's sentence AND the description's
+    # sentence (see _sentence_key), once the description head is known.
     chunks = list(doc.noun_chunks)
     token_to_chunk = {t.i: c for c in chunks for t in c}
 
@@ -453,7 +481,8 @@ def extract_from_doc(doc, symbol, audit=None, name_map=None):
                           head=head.text if head is not None else None,
                           rule=rule, confidence="high")
             if audit is not None:
-                audit.setdefault("extract_symbol_description", {})[context] = desc
+                key = _sentence_key(tok, head, name_map, symbol)
+                audit.setdefault("extract_symbol_description", {})[key] = desc
             return result
 
     desc, head = _fallback_nearest_np(doc, tok, tok.i, chunks)
@@ -463,9 +492,11 @@ def extract_from_doc(doc, symbol, audit=None, name_map=None):
                       head=head.text if head is not None else None,
                       rule="fallback_nearest", confidence="low")
         if audit is not None:
-            audit.setdefault("extract_symbol_description", {})[context] = desc
+            key = _sentence_key(tok, head, name_map, symbol)
+            audit.setdefault("extract_symbol_description", {})[key] = desc
     elif audit is not None:
-        audit.setdefault("extract_symbol_description", {})[context] = None
+        key = _sentence_key(tok, None, name_map, symbol)
+        audit.setdefault("extract_symbol_description", {})[key] = None
     return result
 
 
