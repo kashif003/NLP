@@ -4,7 +4,7 @@ from html_parser import HTML_Reader, map_symbols_to_equations
 from tqdm import tqdm
 from utils import get_sentences_around_label
 from relations import get_relations
-from extract_description import get_description
+from extract_description import get_description, extract_lhs
 import json
 
 paper_list = paper_ID_extractor("./paper_list_12.txt")
@@ -58,6 +58,11 @@ for paper_id in tqdm(paper_list[:10]):
     eq_context = {}
     audits = {}
 
+    # for the "same LHS -> same meaning" pass:
+    eq_lhs = {}            # eq -> its LHS latex (or None)
+    eq_matched = {}        # eq -> True if its LHS matched one of its symbols
+    eq_meaning_by_eq = {}  # eq -> the meaning chosen in pass 1
+
     # ---------- PASS 1: meanings + symbols, and build eq_context ----------
     for i, eq in enumerate(equaitons):
         index = i + 1
@@ -77,23 +82,86 @@ for paper_id in tqdm(paper_list[:10]):
         # audit: record which symbols were matched into this equation
         eq_audit["map_symbols_to_equations"] = {latex: [sym_mapping[s] for s in symbols]}
 
-        # equation meaning
-        eq_meaning = get_description(clean_text, eq, audit=eq_audit, name_map=name_map)
         paper_dataset[f"arXiv:{paper_id}"][index]["equation"] = latex
-        paper_dataset[f"arXiv:{paper_id}"][index]["meaning"] = eq_meaning
 
-        # symbol meanings
+        # --- symbol meanings FIRST (needed to decide the equation meaning) ---
+        # sym_meanings_by_ph maps placeholder -> meaning, so the LHS match below
+        # can reuse a symbol's meaning directly by its placeholder.
+        sym_meanings_by_ph = {}
         for sym in symbols:
             sym_meaning = get_meanings(clean_text, sym, audit=eq_audit, name_map=name_map)
+            sym_meanings_by_ph[sym] = sym_meaning
             if "symbols" not in paper_dataset[f"arXiv:{paper_id}"][index]:
                 paper_dataset[f"arXiv:{paper_id}"][index]["symbols"] = {}
             paper_dataset[f"arXiv:{paper_id}"][index]["symbols"][strip_backslash(sym_mapping[sym])] = sym_meaning
+
+        # --- equation meaning: if the LHS IS one of the equation's symbols,
+        # reuse that symbol's meaning (the equation defines it). Raw latex on
+        # both sides. Otherwise fall back to the general meaning pipeline. ---
+        lhs = extract_lhs(latex)
+        lhs_symbol = None
+        if lhs:
+            for s in symbols:
+                if sym_mapping[s] == lhs:
+                    lhs_symbol = s
+                    break
+
+        if lhs_symbol is not None and sym_meanings_by_ph.get(lhs_symbol):
+            eq_meaning = sym_meanings_by_ph[lhs_symbol]
+            eq_audit.setdefault("equation_meaning_method", {})[latex] = (
+                f"LHS '{lhs}' matches symbol -> reuse its meaning: {eq_meaning}"
+            )
+        else:
+            eq_meaning = get_description(clean_text, eq, audit=eq_audit, name_map=name_map)
+
+        paper_dataset[f"arXiv:{paper_id}"][index]["meaning"] = eq_meaning
+
+        # remember for the LHS-grouping pass below
+        eq_lhs[eq] = lhs
+        eq_matched[eq] = lhs_symbol is not None
+        eq_meaning_by_eq[eq] = eq_meaning
 
         # store audit so far (relations are appended in pass 2)
         paper_dataset[f"arXiv:{paper_id}"][index]["audit-trail"] = eq_audit
 
         # context for relation-matching = meaning + every symbol meaning
         eq_context[eq] = eq_meaning or ""
+
+    # ---------- PASS 1.5: equations with the SAME LHS share one meaning ----------
+    # group equations by their LHS latex
+    lhs_groups = {}
+    for eq in equaitons:
+        l = eq_lhs.get(eq)
+        if l:
+            lhs_groups.setdefault(l, []).append(eq)
+
+    for l, group in lhs_groups.items():
+        if len(group) < 2:
+            continue  # only groups that actually share an LHS
+
+        # option 2: winner = meaning of an eq whose LHS matched a symbol;
+        # otherwise the first non-empty meaning in the group.
+        winner = None
+        for eq in group:
+            if eq_matched.get(eq) and eq_meaning_by_eq.get(eq):
+                winner = eq_meaning_by_eq[eq]
+                break
+        if winner is None:
+            for eq in group:
+                if eq_meaning_by_eq.get(eq):
+                    winner = eq_meaning_by_eq[eq]
+                    break
+        if winner is None:
+            continue  # nobody in the group had a meaning
+
+        # assign the winning meaning to every equation in the group
+        for eq in group:
+            idx = equaitons.index(eq) + 1
+            paper_dataset[f"arXiv:{paper_id}"][idx]["meaning"] = winner
+            eq_context[eq] = winner or ""
+            audits[eq].setdefault("equation_meaning_method", {})[eqn_mapping[eq]["latex"]] = (
+                f"shares LHS '{l}' -> unified meaning: {winner}"
+            )
 
     # ---------- PASS 2: relations (needs the FULL eq_context) ----------
     for i, eq in enumerate(equaitons):
@@ -107,3 +175,5 @@ for paper_id in tqdm(paper_list[:10]):
     # ---------- PASS 3: Save this specific paper's JSON before moving to the next ----------
     with open(f"./results/with_audit/{paper_id}.json", "w") as file:
         json.dump(paper_dataset, file, indent=4) # Added indent=4 to make your JSON files beautiful and readable!
+    
+    break
