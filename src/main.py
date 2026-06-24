@@ -28,7 +28,7 @@ Path("./results").mkdir(parents=True, exist_ok=True)
 
 
 
-EQUATION_TARGET =10          # stop AFTER the paper that reaches this total
+EQUATION_TARGET =350        # stop AFTER the paper that reaches this total
 total_equations = 0             # running count across ALL papers, in order
 dataset = {}                    # ONE combined dataset: {"arXiv:<id>": sub_dict}
 
@@ -198,7 +198,6 @@ for paper_id in paper_list:
     # spec stop rule: once we reach the target, FINISH this paper (already done
     # above) and stop. The last paper is processed completely, so the final
     # total may slightly exceed the target.
-    break
     if total_equations >= EQUATION_TARGET:
         print(f"[INFO] Reached {total_equations} equations (>= {EQUATION_TARGET}). Stopping.")
         break
