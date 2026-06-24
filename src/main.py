@@ -12,6 +12,8 @@ paper_list = paper_ID_extractor("./paper_list_12.txt")
 
 # Set the directory to the current folder ('.' means current directory)
 current_dir = Path('./data/html_source')
+# make sure the source directory exists before we try to read from it
+current_dir.mkdir(parents=True, exist_ok=True)
 html_files = []
 # Loop through and print everything in the directory
 for item in current_dir.iterdir():
@@ -20,13 +22,13 @@ for item in current_dir.iterdir():
         html_files.append(file_name[:-5])
 
 # make sure the results folder exists, otherwise open(..., "w") will crash
-Path("./results/with_audit").mkdir(parents=True, exist_ok=True)
+Path("./results").mkdir(parents=True, exist_ok=True)
 
 # We removed "dataset = {}" from here so papers stay separated!
 
 
 
-EQUATION_TARGET =350          # stop AFTER the paper that reaches this total
+EQUATION_TARGET =10          # stop AFTER the paper that reaches this total
 total_equations = 0             # running count across ALL papers, in order
 dataset = {}                    # ONE combined dataset: {"arXiv:<id>": sub_dict}
 
@@ -36,7 +38,7 @@ for paper_id in paper_list:
     if not downloaded:
         print("[IMPORTANT] Unable to download the paper:", paper_id)
         dataset[f"arXiv:{paper_id}"] = "Unable to download the paper"
-        with open("./results/with_audit/dataset.json", "w") as file:
+        with open("./results/dataset.json", "w") as file:
             json.dump(dataset, file, indent=4)
         continue
 
@@ -186,7 +188,7 @@ for paper_id in paper_list:
 
     # save the combined dataset after EACH paper, so a crash/error mid-run
     # still leaves a valid JSON with everything processed so far.
-    with open("./results/with_audit/dataset.json", "w") as file:
+    with open("./results/dataset.json", "w") as file:
         json.dump(dataset, file, indent=4)
 
     # count this paper's equations and log the running total
@@ -196,10 +198,11 @@ for paper_id in paper_list:
     # spec stop rule: once we reach the target, FINISH this paper (already done
     # above) and stop. The last paper is processed completely, so the final
     # total may slightly exceed the target.
+    break
     if total_equations >= EQUATION_TARGET:
         print(f"[INFO] Reached {total_equations} equations (>= {EQUATION_TARGET}). Stopping.")
         break
 
 # write the ONE combined dataset after the loop ends
-with open("./results/with_audit/dataset.json", "w") as file:
+with open("./results/dataset.json", "w") as file:
     json.dump(dataset, file, indent=4)
