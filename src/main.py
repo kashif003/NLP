@@ -25,22 +25,19 @@ Path("./results/with_audit").mkdir(parents=True, exist_ok=True)
 
 
 
-for paper_id in tqdm(paper_list[:10]):
-    # Initialize a dedicated dataset dictionary for THIS paper only
-    paper_dataset = {}
-    
+EQUATION_TARGET =350          # stop AFTER the paper that reaches this total
+total_equations = 0             # running count across ALL papers, in order
+dataset = {}                    # ONE combined dataset: {"arXiv:<id>": sub_dict}
+
+for paper_id in paper_list:
     print("[INFO] Downloading the paper:", paper_id)
     downloaded = download_html(paper_id)
     if not downloaded:
         print("[IMPORTANT] Unable to download the paper:", paper_id)
-        paper_dataset[f"arXiv:{paper_id}"] = "Unable to download the paper"
-        
-        # Even if it fails, we save the failure status to its own file
-        with open(f"./results/with_audit/{paper_id}.json", "w") as file:
-            json.dump(paper_dataset, file, indent=4)
+        dataset[f"arXiv:{paper_id}"] = "Unable to download the paper"
         continue
-    
-    paper_dataset[f"arXiv:{paper_id}"] = {}
+
+    paper_dataset = {f"arXiv:{paper_id}": {}}
     extractor = HTML_Reader(paper_id)
     clean_text, eqn_mapping, sym_mapping = extractor.extract()
     eq_to_syms = map_symbols_to_equations(eqn_mapping, sym_mapping)
@@ -176,7 +173,20 @@ for paper_id in tqdm(paper_list[:10]):
                                   eqn_mapping, eq_context=eq_context, audit=eq_audit)
         paper_dataset[f"arXiv:{paper_id}"][index]["relations"] = relations
 
-    # ---------- PASS 3: Save this specific paper's JSON before moving to the next ----------
-    with open(f"./results/with_audit/{paper_id}.json", "w") as file:
-        json.dump(paper_dataset, file, indent=4) # Added indent=4 to make your JSON files beautiful and readable!
-    break
+    # ---------- merge this paper into the ONE combined dataset ----------
+    dataset[f"arXiv:{paper_id}"] = paper_dataset[f"arXiv:{paper_id}"]
+
+    # count this paper's equations and log the running total
+    total_equations += len(equaitons)
+    print(f"[INFO] {paper_id}: {len(equaitons)} equations | total so far: {total_equations}")
+
+    # spec stop rule: once we reach the target, FINISH this paper (already done
+    # above) and stop. The last paper is processed completely, so the final
+    # total may slightly exceed the target.
+    if total_equations >= EQUATION_TARGET:
+        print(f"[INFO] Reached {total_equations} equations (>= {EQUATION_TARGET}). Stopping.")
+        break
+
+# write the ONE combined dataset after the loop ends
+with open("./results/with_audit/dataset.json", "w") as file:
+    json.dump(dataset, file, indent=4)
