@@ -59,13 +59,13 @@ def _get_nlp(model="en_core_web_trf"):
     global _NLP
     if _NLP is None:
         import spacy
+        spacy.prefer_gpu()          # use GPU if available; silently CPU if not
         try:
             _NLP = spacy.load(model)
         except OSError:
             print(f"⚠️ Model '{model}' not found. Falling back to 'en_core_web_sm'.")
             _NLP = spacy.load("en_core_web_sm")
     return _NLP
-
 
 def extract_lhs(equation_text):
     """
