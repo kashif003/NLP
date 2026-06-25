@@ -3,3 +3,4 @@ logs
 venv
 src/__pycache__
 results
+report
