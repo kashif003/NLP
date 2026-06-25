@@ -1,58 +1,47 @@
-def paper_ID_extractor(path, n= None):
-    """Extracts paper IDs from a file by parsing the substring after the first colon on each line."""
-    paper_list=[]
+import os
+import re
+import time
+import requests
+import nltk
+from nltk.tokenize import sent_tokenize
+from extract_description import get_description
+
+# Ensure required NLTK tokenizer data is available locally
+nltk.download("punkt")
+nltk.download("punkt_tab")
+
+
+def paper_ID_extractor(path, n=None):
+    """Extract arXiv paper IDs from a text file by splitting after the first colon."""
+    paper_list = []
     with open(path, "r") as f:
         for line in f:
             line = line.strip()         
             if line:                     
                 paper_list.append(line.split(":", 1)[1])
-        if n:
-            return paper_list[:n]
-        else:
-            return paper_list
+    return paper_list[:n] if n else paper_list
 
 
-import time
-import os
-import requests
 def download_html(arxiv_id: str, save_dir: str = "./data/html_source") -> bool:
     """
-    Download HTML version of an arxiv paper and save it locally.
-
-    Distinguishes two failure types:
-      - request ERROR (timeout, connection drop): wait 15s and retry ONCE.
-        If it errors again, give up and return False.
-      - paper NOT AVAILABLE (request succeeds but status != 200): no retry,
-        return False immediately.
-
-    Parameters
-    ----------
-    arxiv_id : str
-        The arxiv paper ID.
-    save_dir : str
-        Directory to save the HTML files.
-
-    Returns
-    -------
-    bool
-        True if download was successful, False otherwise.
+    Download HTML version of an arXiv paper with a single-retry mechanism for network errors.
+    
+    - Network drops/timeouts: Wait 15s and retry once.
+    - Bad request (e.g., status 404): Fail immediately without retrying.
     """
-    time.sleep(3)
+    time.sleep(3)  # Polite rate limiting
     url = f"https://arxiv.org/html/{arxiv_id}"
 
     response = None
     try:
         response = requests.get(url, allow_redirects=True)
     except requests.RequestException:
-        # network/connection ERROR -> wait and retry exactly once
-        time.sleep(15)
+        time.sleep(15)  # Network failure retry delay
         try:
             response = requests.get(url, allow_redirects=True)
         except requests.RequestException:
-            # still failing after retry -> give up, caller records failure
             return False
 
-    # request went through; if the paper is simply not available, do NOT retry
     if response.status_code != 200:
         return False
 
@@ -64,17 +53,10 @@ def download_html(arxiv_id: str, save_dir: str = "./data/html_source") -> bool:
     return True
 
 
-import nltk
-from nltk.tokenize import sent_tokenize
-import re
-# Run once to download the required tokenizer data (local, no prompting)
-nltk.download("punkt")
-nltk.download("punkt_tab")  # needed for newer NLTK versions (>=3.8.2)
 def get_sentences_around_label(text, label, window=1, sentences=None):
     """
-    Extract sentence-level context around an equation label's occurrences.
-    `sentences` lets the caller pass the paper already split into sentences,
-    so sent_tokenize is not re-run on the whole paper for every symbol.
+    Extract a window of sentences surrounding a specific equation or symbol label.
+    Accepts pre-tokenized sentences to eliminate redundant whole-paper processing.
     """
     if sentences is None:
         sentences = sent_tokenize(text)
@@ -98,35 +80,25 @@ def get_sentences_around_label(text, label, window=1, sentences=None):
     return result
 
 
-
 def strip_backslash(s):
-    """
-    Remove every backslash from a string, for use as a clean JSON key.
-
-    s        : a latex string, e.g. "\\mathcal{L}" or "T_{max}"
-    returns  : the same string with all backslashes removed,
-               e.g. "mathcal{L}", "T_{max}" (unchanged if it had none)
-    """
+    """Remove backslashes from a LaTeX string to make it safe for use as a JSON key."""
     return s.replace("\\", "")
 
-from extract_description import get_description
-def get_meanings(clean_text, eq, audit=None, name_map=None, sentences=None):
-    """
-    Get the meaning of a symbol/equation, trying the main context first and
-    the mention context as a fallback.
 
-    `sentences` is the paper pre-split into sentences (built once per paper in
-    main.py) so the whole-paper sent_tokenize is not repeated for every symbol.
-
-    Returns
-    -------
-    str or None
-        Extracted meaning, or None if nothing was found.
+def get_meanings(clean_text, label, audit=None, name_map=None, sentences=None):
     """
-    full_context = get_sentences_around_label(clean_text, eq, sentences=sentences)
+    Extract description for a label, checking main context before falling back to mentions.
+    Uses cached sentences to bypass repeated tokenization steps.
+    """
+    full_context = get_sentences_around_label(clean_text, label, sentences=sentences)
+    
+    # Try main structural context
     main_context = " ".join(full_context["main_context"])
-    eq_disc = get_description(main_context, eq, audit=audit, name_map=name_map)
+    eq_disc = get_description(main_context, label, audit=audit, name_map=name_map)
+    
+    # Fallback to textual mention context if description is missing
     if eq_disc is None:
         mention_context = " ".join(full_context["mention_context"])
-        eq_disc = get_description(mention_context, eq, audit=audit, name_map=name_map)
+        eq_disc = get_description(mention_context, label, audit=audit, name_map=name_map)
+        
     return eq_disc

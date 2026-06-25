@@ -13,38 +13,33 @@ MAX_EQUATIONS = 7
 
 
 class HTML_Reader:
-    """Extracts clean text from arXiv HTML papers, replacing math with placeholders."""
+    """Extracts text from arXiv HTML papers, replacing math with placeholders."""
 
     def __init__(self, paper_id):
-        """Initialize the extractor with file paths, counters, mappings, and audit trails."""
         self.paper_id = paper_id
         self.html_path = os.path.join("data/html_source", f"{paper_id}.html")
         self.soup = self._parse_html()
 
-        # counters and mappings
+        # State tracking and lookups
         self._sym_counter = 1
         self.eqn_mapping = {}   # "EQN1" -> {"latex": ..., "real_id": ...}
         self.sym_mapping = {}   # "SYM1"  -> latex string
-        self._sym_seen = {}     # latex string -> placeholder (dedup)
-        self._eqn_seen = {}     # real_id -> placeholder (dedup)
+        self._sym_seen = {}     # Deduplication map for symbols
+        self._eqn_seen = {}     # Deduplication map for equations
 
-        # audit trail: method_name -> list of short messages.
         self.audit = {}
-
-        # authoritative equation set, mirrors HTMLReader._find_equations
-        self.equations = self._find_equations()   # real_id -> {number, latex}
+        self.equations = self._find_equations()
 
     def _log(self, method, message):
-        """Append a short diagnostic message to the audit log."""
+        """Append diagnostic message to audit log."""
         self.audit.setdefault(method, []).append(message)
 
     def _parse_html(self):
-        """Parse the input HTML file into a BeautifulSoup object."""
         with open(self.html_path, "r", encoding="utf-8", errors="ignore") as f:
             return BeautifulSoup(f.read(), "html.parser")
 
     def _get_block_root(self, tag):
-        """Find the topmost equation block container by walking up parents."""
+        """Find highest equation container by walking up the DOM."""
         current = tag
         while current.parent:
             parent_classes = set(current.parent.get("class") or [])
@@ -55,7 +50,7 @@ class HTML_Reader:
         return current
 
     def _find_equations(self):
-        """Locate and track up to MAX_EQUATIONS enumerated equations from the HTML."""
+        """Locate up to MAX_EQUATIONS enumerated equations from the HTML."""
         equations = {}
         current_prefix = None
         section_counter = 1
@@ -78,7 +73,7 @@ class HTML_Reader:
                 current_prefix = prefix
                 section_counter += 1
 
-            # walk to block root to deduplicate multi-line equations
+            # Prevent duplication on multi-line elements
             block_root = self._get_block_root(parent) if parent else parent
             root_id = id(block_root)
             if root_id in seen_roots:
@@ -88,49 +83,39 @@ class HTML_Reader:
             if not eq_id:
                 continue
 
-            # displayed paper number from span text e.g. "(1)" -> "1"
+            # Strip brackets to isolate number label
             number = re.sub(r'[\(\)]', '', span.get_text(strip=True)).strip()
-            # full latex from ALL math tags in the entire block
             latex = self._get_equation_latex(block_root)
 
             equations[eq_id] = {"number": number, "latex": latex}
 
-            # audit: record that this equation was found
             snippet = (latex[:60] + "...") if len(latex) > 60 else latex
-            self._log(
-                "find_equations",
-                f"Found equation {number}: {snippet}",
-            )
+            self._log("find_equations", f"Found equation {number}: {snippet}")
 
         return equations
 
     def _get_equation_latex(self, block_root):
-        """Extract and concatenate full LaTeX string from all math tags in a block."""
+        """Extract and concatenate full LaTeX string from math block."""
         raw_latex = " ".join(
             m.get("alttext", "")
             for m in block_root.find_all("math")
             if m.get("alttext")
         )
         
-        # --- NEW CLEANING STEP ---
-        # Strip \text{} formatting from the equations as well so they match the symbols
+        # Strip text formatting to keep math strings raw
         if raw_latex:
             raw_latex = re.sub(r'\\text{([^}]+)}', r'\1', raw_latex)
-        # -------------------------
         
         return raw_latex
 
     def _get_eqn_placeholder(self, real_id):
-        """Get or create a unique placeholder (e.g., EQN1) for a valid equation ID."""
-        # not in authoritative enumerated set (non-enumerated / beyond limit)
+        """Get or register a unique placeholder for an equation ID."""
         if real_id not in self.equations:
             return "TEMPEQN"
 
-        # already assigned
         if real_id in self._eqn_seen:
             return self._eqn_seen[real_id]
 
-        # new enumerated equation — paper number + precomputed latex
         number = self.equations[real_id]["number"]
         placeholder = f"EQN{number}"
         self.eqn_mapping[placeholder] = {
@@ -141,21 +126,13 @@ class HTML_Reader:
         return placeholder
 
     def _get_sym_placeholder(self, alttext):
-        """Get or create a unique placeholder (e.g., SYM1) for an inline math token."""
-        # --- NEW CLEANING STEP ---
-        # This removes \text{ or \text and the enclosing brackets, leaving just the content
+        """Get or register a unique placeholder for an inline token."""
         if alttext:
             alttext = re.sub(r'\\text{([^}]+)}', r'\1', alttext)
-        # -------------------------
 
-        # --- SKIP STANDALONE NUMBERS ---
-        # A pure number like "2", "0.5", "-3" is not a symbol worth tracking.
-        # We strip a leading sign and one decimal point; if what remains is all
-        # digits, it's standalone -> return "" (no placeholder, dropped from text).
-        # "\omega_{2}" keeps its letters/braces, so isdigit() is False -> kept.
+        # Ignore standalone numeric strings
         if alttext and alttext.strip().lstrip("+-").replace(".", "", 1).isdigit():
             return ""
-        # -------------------------------
 
         if alttext in self._sym_seen:
             return self._sym_seen[alttext]
@@ -167,7 +144,7 @@ class HTML_Reader:
         return placeholder
 
     def _is_inside_equation(self, tag):
-        """Check if a given HTML tag is structurally inside an equation block."""
+        """Check if tag is nested within an equation container."""
         for parent in tag.parents:
             parent_classes = set(parent.get("class") or [])
             if parent_classes & EQUATION_BLOCK_CLASSES:
@@ -175,12 +152,11 @@ class HTML_Reader:
         return False
 
     def _process_node(self, node):
-        """Recursively convert HTML text and nodes into placeholder-replaced strings."""
-        # plain text node
+        """Recursively swap text elements and math tags with placeholder IDs."""
         if isinstance(node, NavigableString):
             return str(node)
 
-        # equation block — replace with placeholder
+        # Equation structural blocks
         node_classes = set(node.get("class") or [])
         if node_classes & EQUATION_BLOCK_CLASSES:
             real_id = None
@@ -196,7 +172,7 @@ class HTML_Reader:
                 return " " + self._get_eqn_placeholder(real_id) + " "
             return " TEMPEQN "
 
-        # equation mention
+        # Citations / textual cross-references to equations
         if node.name == "a":
             href = node.get("href", "")
             if "#" in href:
@@ -209,7 +185,7 @@ class HTML_Reader:
                     if number:
                         return " MEQN" + number + " "
 
-        # inline math tag — replace with symbol placeholder
+        # Inline math elements
         if node.name == "math":
             if self._is_inside_equation(node):
                 return ""
@@ -218,23 +194,21 @@ class HTML_Reader:
                 return " " + self._get_sym_placeholder(alttext) + " "
             return ""
 
-        # recurse into children
         parts = []
         for child in node.children:
             parts.append(self._process_node(child))
         return "".join(parts)
 
     def extract(self):
-        """Process the document to extract cleaned text along with its math mappings."""
+        """Parse document to return clean prose, equation logs, and symbol lists."""
         body = self.soup.find("body") or self.soup
-
         raw_text = self._process_node(body)
 
-        # collapse whitespace
+        # Uniform formatting cleanup
         clean_text = re.sub(r'\n{3,}', '\n\n', raw_text)
         clean_text = re.sub(r' {2,}', ' ', clean_text)
 
-        # tidy equation mentions
+        # Standardize textual equation references
         mention = r'MEQN[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*'
         clean_text = re.sub(
             r'(?:(?:Eqs?|Eqns?|Equations?)\.?\s*)?\(\s*(' + mention + r')\s*\)',
@@ -247,13 +221,11 @@ class HTML_Reader:
             clean_text,
         )
 
-        clean_text = clean_text.strip()
-
-        return clean_text, self.eqn_mapping, self.sym_mapping
+        return clean_text.strip(), self.eqn_mapping, self.sym_mapping
 
 
 def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
-    """Map which inline symbols appear inside each equation using boundary-aware regex."""
+    """Correlate symbols to equations using target-aware regex scanners."""
     matchers = {}
     for sym_ph, sym_latex in sym_mapping.items():
         if not sym_latex:
@@ -267,9 +239,7 @@ def map_symbols_to_equations(eqn_mapping, sym_mapping, audit=None):
     result = {}
     for eq_ph, eq_data in eqn_mapping.items():
         eq_latex = eq_data.get("latex", "")
-        found = [
-            sym_ph for sym_ph, rx in matchers.items() if rx.search(eq_latex)
-        ]
+        found = [sym_ph for sym_ph, rx in matchers.items() if rx.search(eq_latex)]
         result[eq_ph] = found
 
         if audit is not None:

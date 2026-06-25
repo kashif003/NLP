@@ -96,15 +96,6 @@ def check_duplicate_lhs(name_map):
     return ph_to_duplicates
 
 
-# def _name(ph, name_map):  #TODO remove this fucnction
-#     """
-#     Looks up a placeholder's original mathematical text from the name map.
-#     Returns the placeholder itself if no map is provided.
-#     """
-#     if name_map is None:
-#         return ph
-#     return name_map.get(ph, ph)
-
 
 def _is_symbol(tok):
     """
