@@ -72,14 +72,4 @@ Not currently pinned in a `requirements.txt` (see cleanup notes below), but base
    python main.py
    ```
    This works through `paper_list_11.txt`, downloading papers, extracting and classifying figures, and stopping once 250 matching images have been collected (a hardcoded limit in `main.py`). Results land in `quantum_circuit_images/`, `output_enriched.json`, and `images_per_paper.csv`.
-
-## Cleanup notes
-
-Worth addressing as part of a broader cleanup pass:
-- **No `requirements.txt`** — dependencies must currently be inferred from imports; adding one (with pinned versions) would make this reproducible.
-- **Hardcoded paths and constants** scattered through `main.py` (e.g. `Embeddings/positive_anchor.pt`, the 250-image cap, the 0.94 similarity threshold) would be cleaner as config/CLI arguments.
-- **`main.py` references `shutil`** without importing it directly (relies on the `from utils import *` wildcard import picking it up transitively) — fragile; should be imported explicitly.
-- Several **typos** in docstrings/variable names throughout (`discription` → `description`, `enchor` → `anchor`, `dodwnloaded` → `downloaded`, `seperate_...` → `separate_...`, `fucntion` → `function`) — harmless but worth a pass for polish.
-- `image_extractor.py`'s duplicate-detection logic (`unique_metadata`) and the `Pdf_Preprocess`/`Latex_preprocessor` classes have some overlapping responsibility with `reader.py` — could likely be consolidated.
-- Wildcard imports (`from utils import *`, `from reader import *`, etc.) throughout make it hard to trace where a given function actually comes from — explicit imports would help readability.
-- No tests currently exist for the text-cleaning regex pipelines, which are intricate enough (especially `text_preprocessor.py`) to benefit from unit tests given a few sample LaTeX/PDF snippets.
+for the text-cleaning regex pipelines, which are intricate enough (especially `text_preprocessor.py`) to benefit from unit tests given a few sample LaTeX/PDF snippets.
